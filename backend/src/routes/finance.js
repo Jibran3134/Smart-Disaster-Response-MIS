@@ -1,6 +1,3 @@
-// ============================================================
-// finance.js — Financial Transactions, Budgets & Donors
-// ============================================================
 // Endpoints:
 //   GET    /api/finance/transactions        → List all financial transactions
 //   GET    /api/finance/transactions/:id    → Get one transaction
@@ -16,21 +13,13 @@
 //   GET    /api/finance/summary             → Financial summary report
 //
 // Access: Administrator, Finance Officer
-// Note: Creating transactions is done via /api/transactions/financial-entry
-//       (the transactional route in transactions.js)
-// ============================================================
 
 const express = require('express');
 const { getPool, sql } = require('../config/db');
 
 const router = express.Router();
 
-
-// ════════════════════════════════════════════════════════════
-//  FINANCIAL TRANSACTIONS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/finance/transactions ──
+//  GET /api/finance/transactions 
 // List all financial transactions (optional filters: ?type=Donation&status=Completed&event_id=1)
 router.get('/transactions', async (req, res) => {
   try {
@@ -75,7 +64,7 @@ router.get('/transactions', async (req, res) => {
 });
 
 
-// ── GET /api/finance/transactions/:id ──
+//  GET /api/finance/transactions/:id 
 // Get a single transaction with its audit log
 router.get('/transactions/:id', async (req, res) => {
   try {
@@ -123,7 +112,7 @@ router.get('/transactions/:id', async (req, res) => {
 });
 
 
-// ── PUT /api/finance/transactions/:id ──
+//  PUT /api/finance/transactions/:id 
 // Update transaction status (e.g. Pending → Completed)
 // Body: { status }
 router.put('/transactions/:id', async (req, res) => {
@@ -156,12 +145,7 @@ router.put('/transactions/:id', async (req, res) => {
   }
 });
 
-
-// ════════════════════════════════════════════════════════════
-//  DONORS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/finance/donors ──
+//  GET /api/finance/donors 
 // List all donors
 router.get('/donors', async (req, res) => {
   try {
@@ -183,7 +167,7 @@ router.get('/donors', async (req, res) => {
 });
 
 
-// ── POST /api/finance/donors ──
+//  POST /api/finance/donors 
 // Create a new donor
 // Body: { donor_name, donor_type, contact_info }
 router.post('/donors', async (req, res) => {
@@ -217,12 +201,7 @@ router.post('/donors', async (req, res) => {
   }
 });
 
-
-// ════════════════════════════════════════════════════════════
-//  BUDGETS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/finance/budgets ──
+//  GET /api/finance/budgets 
 // List all budgets with event info
 router.get('/budgets', async (req, res) => {
   try {
@@ -243,7 +222,7 @@ router.get('/budgets', async (req, res) => {
 });
 
 
-// ── POST /api/finance/budgets ──
+//  POST /api/finance/budgets 
 // Create a new budget for a disaster event
 // Body: { event_id, total_allocated }
 router.post('/budgets', async (req, res) => {
@@ -277,7 +256,7 @@ router.post('/budgets', async (req, res) => {
 });
 
 
-// ── PUT /api/finance/budgets/:id ──
+//  PUT /api/finance/budgets/:id 
 // Update a budget
 // Body: { total_allocated, total_spent }
 router.put('/budgets/:id', async (req, res) => {
@@ -309,11 +288,7 @@ router.put('/budgets/:id', async (req, res) => {
 });
 
 
-// ════════════════════════════════════════════════════════════
-//  FINANCIAL SUMMARY (MIS Report)
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/finance/summary ──
+//  GET /api/finance/summary 
 // Returns aggregated financial summary
 router.get('/summary', async (req, res) => {
   try {

@@ -1,27 +1,6 @@
-// ============================================================
-// server.js — Main Entry Point
-// ============================================================
-// Wires up all middleware and routes for the Disaster Response API.
-//
-// Middleware order:
-//   1. express.json()    → parse JSON request bodies
-//   2. cors              → allow frontend to call the API
-//   3. authMiddleware    → verify JWT token (skips login/register)
-//   4. rbacMiddleware    → check role-based access (skips login/register)
-//
-// Routes:
-//   /api/auth            → Login, Register, Profile
-//   /api/emergencies     → Disaster Events & Emergency Reports
-//   /api/teams           → Rescue Teams & Assignments
-//   /api/resources       → Resources, Warehouses, Inventory, Allocations
-//   /api/hospitals       → Hospitals & Patients
-//   /api/finance         → Financial Transactions, Donors, Budgets
-//   /api/approvals       → Approval Workflow
-//   /api/transactions    → Multi-step DB Transactions (ACID)
-// ============================================================
 
 const express = require('express');
-const cors = require('cors');
+const cors = require('cors');//allow frontend to call the API
 require('dotenv').config();
 
 const { connectDB } = require('./config/db');
@@ -43,7 +22,12 @@ const transactionsRoutes = require('./routes/transactions');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ── Body parsing ──
+// Middleware Pipeline — every request passes through these in order:
+// 1. express.json() parses incoming JSON body
+// 2. cors allows cross-origin requests from the frontend
+// 3. authMiddleware verifies JWT (authentication)
+// 4. rbacMiddleware checks role permissions (authorization)
+// This ensures ALL requests are authenticated + authorized before reaching route handlers
 app.use(express.json());
 
 // ── CORS ──
@@ -56,7 +40,6 @@ app.use(cors({
   credentials: true,
 }));
 
-// ── Auth + RBAC middleware (applied to all /api/* routes) ──
 app.use('/api', authMiddleware);
 app.use('/api', rbacMiddleware);
 
@@ -70,20 +53,49 @@ app.use('/api/finance',      financeRoutes);
 app.use('/api/approvals',    approvalsRoutes);
 app.use('/api/transactions', transactionsRoutes);
 
-// ── Health check (no auth needed) ──
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Start ──
 async function start() {
   try {
     await connectDB();
-    console.log('✅ Connected to SQL Server');
+    console.log(' Connected to SQL Server');
   } catch (err) {
-    console.warn('⚠️  Could not connect to SQL Server:', err.message);
-    console.warn('   The server will start, but DB-dependent routes will fail until SQL Server is available.');
+    console.warn(' Could not connect to SQL Server:', err.message);
+    console.warn(' The server will start, but DB-dependent routes will fail until SQL Server is available.');
   }
 
-  app.listen(PORT, () => console.log(`🚀 API running on http://localhost:${PORT}`));
+  app.listen(PORT, () => console.log(` API running on http://localhost:${PORT}`));
 }
 
 start();
+
+// Method: POST
+// URL:    http://localhost:5000/api/auth/register
+
+// {
+//   "full_name": "Jibran Admin",
+//   "email": "admin@test.com",
+//   "password": "admin123",
+//   "role_name": "Administrator"
+// }
+
+// Login
+// Method: POST
+// URL:    http://localhost:5000/api/auth/login
+// Body tab 
+// {
+//   "email": "admin@test.com",
+//   "password": "admin123"
+// }
+// go to Headers tab and add:
+
+// Key:   Authorization
+// Value: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+// Method: GET
+// URL:    http://localhost:5000/api/auth/me
+// Authorization: Bearer <your_token>
+
+  
+

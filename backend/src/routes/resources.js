@@ -1,10 +1,4 @@
-// ============================================================
-// resources.js — Resources, Inventory & Warehouses
-// ============================================================
-// IMPORTANT: Named routes (warehouses, inventory, allocations)
-// must be defined BEFORE /:id to prevent Express from matching
-// "inventory" as a resource ID.
-//
+//  Named routes (warehouses, inventory, allocations)
 // Endpoints:
 //   GET/POST          /api/resources/
 //   GET/PUT           /api/resources/:id
@@ -14,7 +8,6 @@
 //   GET               /api/resources/allocations[/:id]
 //
 // Access: Administrator, Field Officer, Warehouse Manager
-// ============================================================
 
 const express = require('express');
 const { getPool, sql } = require('../config/db');
@@ -22,12 +15,7 @@ const { requireRoles } = require('../middleware/rbac');
 
 const router = express.Router();
 
-
-// ════════════════════════════════════════════════════════════
-//  WAREHOUSES (defined BEFORE /:id to avoid route conflicts)
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/resources/warehouses ──
+//  GET /api/resources/warehouses 
 router.get('/warehouses', async (req, res) => {
   try {
     const pool = getPool();
@@ -44,7 +32,7 @@ router.get('/warehouses', async (req, res) => {
   }
 });
 
-// ── GET /api/resources/warehouses/:id ──
+//  GET /api/resources/warehouses/:id 
 router.get('/warehouses/:id', async (req, res) => {
   try {
     const pool = getPool();
@@ -78,7 +66,7 @@ router.get('/warehouses/:id', async (req, res) => {
   }
 });
 
-// ── POST /api/resources/warehouses ──
+//  POST /api/resources/warehouses 
 router.post('/warehouses', requireRoles('Administrator', 'Warehouse Manager'), async (req, res) => {
   try {
     const { warehouse_name, capacity, street, city, managed_by } = req.body;
@@ -105,7 +93,7 @@ router.post('/warehouses', requireRoles('Administrator', 'Warehouse Manager'), a
   }
 });
 
-// ── PUT /api/resources/warehouses/:id ──
+//  PUT /api/resources/warehouses/:id 
 router.put('/warehouses/:id', requireRoles('Administrator', 'Warehouse Manager'), async (req, res) => {
   try {
     const { warehouse_name, capacity, street, city, managed_by } = req.body;
@@ -134,12 +122,7 @@ router.put('/warehouses/:id', requireRoles('Administrator', 'Warehouse Manager')
   }
 });
 
-
-// ════════════════════════════════════════════════════════════
-//  INVENTORY (defined BEFORE /:id to avoid route conflicts)
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/resources/inventory ──
+//  GET /api/resources/inventory 
 router.get('/inventory', async (req, res) => {
   try {
     const pool = getPool();
@@ -165,7 +148,7 @@ router.get('/inventory', async (req, res) => {
   }
 });
 
-// ── GET /api/resources/inventory/low-stock ──
+//  GET /api/resources/inventory/low-stock 
 router.get('/inventory/low-stock', async (req, res) => {
   try {
     const pool = getPool();
@@ -184,7 +167,7 @@ router.get('/inventory/low-stock', async (req, res) => {
   }
 });
 
-// ── PUT /api/resources/inventory ──
+//  PUT /api/resources/inventory 
 router.put('/inventory', requireRoles('Administrator', 'Warehouse Manager'), async (req, res) => {
   try {
     const { warehouse_id, resource_id, quantity_available, threshold_level } = req.body;
@@ -233,11 +216,7 @@ router.put('/inventory', requireRoles('Administrator', 'Warehouse Manager'), asy
 });
 
 
-// ════════════════════════════════════════════════════════════
-//  ALLOCATIONS (defined BEFORE /:id — view only, creation in transactions.js)
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/resources/allocations ──
+//  GET /api/resources/allocations 
 router.get('/allocations', async (req, res) => {
   try {
     const pool = getPool();
@@ -265,7 +244,7 @@ router.get('/allocations', async (req, res) => {
   }
 });
 
-// ── GET /api/resources/allocations/:id ──
+//  GET /api/resources/allocations/:id 
 router.get('/allocations/:id', async (req, res) => {
   try {
     const pool = getPool();
@@ -299,12 +278,7 @@ router.get('/allocations/:id', async (req, res) => {
   }
 });
 
-
-// ════════════════════════════════════════════════════════════
-//  RESOURCES — base CRUD (/:id routes LAST to avoid conflicts)
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/resources/ ──
+//  GET /api/resources/ 
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
@@ -324,7 +298,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ── POST /api/resources/ ──
+//  POST /api/resources/ 
 router.post('/', requireRoles('Administrator', 'Warehouse Manager'), async (req, res) => {
   try {
     const { resource_name, resource_type, unit_cost } = req.body;
@@ -348,7 +322,7 @@ router.post('/', requireRoles('Administrator', 'Warehouse Manager'), async (req,
   }
 });
 
-// ── GET /api/resources/:id ── (MUST be after all named routes)
+//  GET /api/resources/:id  (MUST be after all named routes)
 router.get('/:id', async (req, res) => {
   try {
     const pool = getPool();
@@ -365,7 +339,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ── PUT /api/resources/:id ──
+//  PUT /api/resources/:id 
 router.put('/:id', requireRoles('Administrator', 'Warehouse Manager'), async (req, res) => {
   try {
     const { resource_name, resource_type, unit_cost } = req.body;

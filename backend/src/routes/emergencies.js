@@ -1,6 +1,3 @@
-// ============================================================
-// emergencies.js — Disaster Events & Emergency Reports
-// ============================================================
 // Endpoints:
 //   GET    /api/emergencies/events          → List all disaster events
 //   GET    /api/emergencies/events/:id      → Get one event
@@ -13,7 +10,7 @@
 //   PUT    /api/emergencies/reports/:id     → Update a report
 //
 // Access: Administrator, Emergency Operator, Field Officer
-// ============================================================
+
 
 const express = require('express');
 const { getPool, sql } = require('../config/db');
@@ -21,21 +18,18 @@ const { getPool, sql } = require('../config/db');
 const router = express.Router();
 
 
-// ════════════════════════════════════════════════════════════
-//  DISASTER EVENTS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/emergencies/events ──
+//  GET /api/emergencies/events 
 // List all disaster events (optional filters: ?status=Active&type=Flood)
 router.get('/events', async (req, res) => {
   try {
     const pool = getPool();
     const { status, type } = req.query;
 
+    // Parameterized queries — using @status, @type instead of string
+    // concatenation prevents SQL injection attacks
     let query = 'SELECT * FROM Disaster_Event WHERE 1=1';
     const request = pool.request();
 
-    // Add optional filters
     if (status) {
       query += ' AND status = @status';
       request.input('status', sql.VarChar(20), status);
@@ -50,6 +44,8 @@ router.get('/events', async (req, res) => {
     const result = await request.query(query);
     return res.json(result.recordset);
 
+  // Graceful error handling — catches DB errors and returns a clean
+  // JSON response instead of crashing the server
   } catch (err) {
     console.error('Get events error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -57,7 +53,7 @@ router.get('/events', async (req, res) => {
 });
 
 
-// ── GET /api/emergencies/events/:id ──
+//  GET /api/emergencies/events/:id 
 // Get a single disaster event by ID
 router.get('/events/:id', async (req, res) => {
   try {
@@ -79,7 +75,7 @@ router.get('/events/:id', async (req, res) => {
 });
 
 
-// ── POST /api/emergencies/events ──
+//  POST /api/emergencies/events 
 // Create a new disaster event
 // Body: { event_name, disaster_type, affected_areas, start_date }
 router.post('/events', async (req, res) => {
@@ -115,7 +111,7 @@ router.post('/events', async (req, res) => {
 });
 
 
-// ── PUT /api/emergencies/events/:id ──
+//  PUT /api/emergencies/events/:id 
 // Update a disaster event (status, end_date, etc.)
 // Body: { event_name, disaster_type, affected_areas, status, end_date }
 router.put('/events/:id', async (req, res) => {
@@ -132,6 +128,8 @@ router.put('/events/:id', async (req, res) => {
       .input('end_date',       sql.DateTime,     end_date ? new Date(end_date) : null)
       .query(`
         UPDATE Disaster_Event
+    //  COALESCE for partial updates — only updates fields the client sends,
+    // keeps existing values for fields not included in the request body
         SET event_name     = COALESCE(@event_name, event_name),
             disaster_type  = COALESCE(@disaster_type, disaster_type),
             affected_areas = COALESCE(@affected_areas, affected_areas),
@@ -153,11 +151,7 @@ router.put('/events/:id', async (req, res) => {
 });
 
 
-// ════════════════════════════════════════════════════════════
-//  EMERGENCY REPORTS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/emergencies/reports ──
+//  GET /api/emergencies/reports 
 // List all emergency reports (optional filters: ?severity=Critical&status=Open&event_id=1)
 router.get('/reports', async (req, res) => {
   try {
@@ -171,6 +165,8 @@ router.get('/reports', async (req, res) => {
       JOIN Disaster_Event de ON er.event_id = de.event_id
       WHERE 1=1
     `;
+    //  JOIN queries — fetches related data from multiple tables
+    // (reports + user who reported + event info) in a single query
     const request = pool.request();
 
     if (severity) {
@@ -198,7 +194,7 @@ router.get('/reports', async (req, res) => {
 });
 
 
-// ── GET /api/emergencies/reports/:id ──
+//  GET /api/emergencies/reports/:id 
 // Get a single emergency report by ID
 router.get('/reports/:id', async (req, res) => {
   try {
@@ -226,7 +222,7 @@ router.get('/reports/:id', async (req, res) => {
 });
 
 
-// ── POST /api/emergencies/reports ──
+//  POST /api/emergencies/reports 
 // Create a new emergency report
 // Body: { event_id, area_name, latitude, longitude, severity }
 router.post('/reports', async (req, res) => {
@@ -238,8 +234,6 @@ router.post('/reports', async (req, res) => {
         error: 'event_id, area_name, latitude, longitude, and severity are required.'
       });
     }
-
-    // Use the logged-in user's ID as the reporter
     const reported_by = req.user.userId;
 
     const pool = getPool();
@@ -269,7 +263,7 @@ router.post('/reports', async (req, res) => {
 });
 
 
-// ── PUT /api/emergencies/reports/:id ──
+//  PUT /api/emergencies/reports/:id 
 // Update a report (e.g. change status or severity)
 // Body: { status, severity, area_name }
 router.put('/reports/:id', async (req, res) => {

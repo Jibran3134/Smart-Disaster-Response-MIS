@@ -1,6 +1,3 @@
-// ============================================================
-// teams.js — Rescue Teams & Assignments
-// ============================================================
 // Endpoints:
 //   GET    /api/teams/                     → List all rescue teams
 //   GET    /api/teams/:id                  → Get one team (with contacts)
@@ -11,7 +8,6 @@
 //   PUT    /api/teams/assignments/complete  → Mark assignment as completed
 //
 // Access: Administrator, Emergency Operator, Field Officer
-// ============================================================
 
 const express = require('express');
 const { getPool, sql } = require('../config/db');
@@ -19,12 +15,7 @@ const { requireRoles } = require('../middleware/rbac');
 
 const router = express.Router();
 
-
-// ════════════════════════════════════════════════════════════
-//  RESCUE TEAMS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/teams/ ──
+//  GET /api/teams/ 
 // List all rescue teams (optional filters: ?status=Available&type=Medical)
 router.get('/', async (req, res) => {
   try {
@@ -55,9 +46,8 @@ router.get('/', async (req, res) => {
 });
 
 
-// ── GET /api/teams/assignments ──
+//  GET /api/teams/assignments 
 // List all team assignments with team and report info
-// (Must be defined BEFORE /:id so Express doesn't treat "assignments" as an id)
 router.get('/assignments', async (req, res) => {
   try {
     const pool = getPool();
@@ -94,7 +84,7 @@ router.get('/assignments', async (req, res) => {
 });
 
 
-// ── PUT /api/teams/assignments/complete ──
+//  PUT /api/teams/assignments/complete 
 // Mark a team assignment as completed + set team status back to Available
 // Body: { team_id, report_id }
 router.put('/assignments/complete',
@@ -113,7 +103,6 @@ router.put('/assignments/complete',
       try {
         await transaction.begin();
 
-        // Step 1: Update the assignment — set completed_at
         await new sql.Request(transaction)
           .input('team_id',   sql.Int, team_id)
           .input('report_id', sql.Int, report_id)
@@ -123,7 +112,6 @@ router.put('/assignments/complete',
             WHERE team_id = @team_id AND report_id = @report_id
           `);
 
-        // Step 2: Set team status back to Available
         await new sql.Request(transaction)
           .input('team_id', sql.Int, team_id)
           .query(`
@@ -132,7 +120,6 @@ router.put('/assignments/complete',
             WHERE team_id = @team_id
           `);
 
-        // Step 3: Update report status to Resolved
         await new sql.Request(transaction)
           .input('report_id', sql.Int, report_id)
           .query(`
@@ -160,7 +147,7 @@ router.put('/assignments/complete',
 );
 
 
-// ── GET /api/teams/:id ──
+//  GET /api/teams/:id 
 // Get a single team by ID (includes contact numbers)
 router.get('/:id', async (req, res) => {
   try {
@@ -203,7 +190,7 @@ router.get('/:id', async (req, res) => {
 });
 
 
-// ── POST /api/teams/ ──
+//  POST /api/teams/ 
 // Create a new rescue team
 // Body: { team_name, team_type, latitude, longitude, area_name, contacts: ["0300...", "0311..."] }
 router.post('/', requireRoles('Administrator', 'Emergency Operator'), async (req, res) => {
@@ -268,7 +255,7 @@ router.post('/', requireRoles('Administrator', 'Emergency Operator'), async (req
 });
 
 
-// ── PUT /api/teams/:id ──
+//  PUT /api/teams/:id 
 // Update a rescue team
 // Body: { team_name, team_type, latitude, longitude, area_name, availability_status }
 router.put('/:id', requireRoles('Administrator', 'Emergency Operator'), async (req, res) => {

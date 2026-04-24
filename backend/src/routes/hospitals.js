@@ -1,6 +1,3 @@
-// ============================================================
-// hospitals.js — Hospitals & Patients
-// ============================================================
 // Endpoints:
 //   GET    /api/hospitals/                  → List all hospitals
 //   GET    /api/hospitals/:id               → Get one hospital (with patients)
@@ -12,19 +9,13 @@
 //   PUT    /api/hospitals/patients/:id      → Update patient info
 //
 // Access: Administrator, Emergency Operator
-// ============================================================
 
 const express = require('express');
 const { getPool, sql } = require('../config/db');
 
 const router = express.Router();
 
-
-// ════════════════════════════════════════════════════════════
-//  HOSPITALS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/hospitals/ ──
+//  GET /api/hospitals/ 
 // List all hospitals (optional filter: ?status=Operational&city=Lahore)
 router.get('/', async (req, res) => {
   try {
@@ -55,9 +46,8 @@ router.get('/', async (req, res) => {
 });
 
 
-// ── GET /api/hospitals/patients/:patientId ──
+//  GET /api/hospitals/patients/:patientId 
 // Update a patient record
-// (Must be defined BEFORE /:id so "patients" isn't treated as an id)
 router.put('/patients/:patientId', async (req, res) => {
   try {
     const { condition, hospital_id } = req.body;
@@ -87,7 +77,7 @@ router.put('/patients/:patientId', async (req, res) => {
 });
 
 
-// ── GET /api/hospitals/:id ──
+//  GET /api/hospitals/:id 
 // Get a single hospital with patient count
 router.get('/:id', async (req, res) => {
   try {
@@ -115,7 +105,7 @@ router.get('/:id', async (req, res) => {
 });
 
 
-// ── POST /api/hospitals/ ──
+//  POST /api/hospitals/ 
 // Create a new hospital
 // Body: { hospital_name, total_beds, available_beds, address, city }
 router.post('/', async (req, res) => {
@@ -154,7 +144,7 @@ router.post('/', async (req, res) => {
 });
 
 
-// ── PUT /api/hospitals/:id ──
+//  PUT /api/hospitals/:id 
 // Update a hospital (e.g. available beds, status)
 // Body: { hospital_name, total_beds, available_beds, address, city }
 router.put('/:id', async (req, res) => {
@@ -191,12 +181,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-
-// ════════════════════════════════════════════════════════════
-//  PATIENTS
-// ════════════════════════════════════════════════════════════
-
-// ── GET /api/hospitals/:id/patients ──
+//  GET /api/hospitals/:id/patients 
 // List all patients in a specific hospital
 router.get('/:id/patients', async (req, res) => {
   try {
@@ -220,7 +205,7 @@ router.get('/:id/patients', async (req, res) => {
 });
 
 
-// ── POST /api/hospitals/:id/patients ──
+//  POST /api/hospitals/:id/patients 
 // Admit a patient to a hospital
 // Body: { patient_name, dob, condition, report_id }
 router.post('/:id/patients', async (req, res) => {
@@ -238,7 +223,7 @@ router.post('/:id/patients', async (req, res) => {
     try {
       await transaction.begin();
 
-      // Step 1: Check if hospital has available beds
+      //  Check if hospital has available beds
       const hospCheck = await new sql.Request(transaction)
         .input('hospital_id', sql.Int, hospital_id)
         .query('SELECT available_beds FROM Hospital WHERE hospital_id = @hospital_id');
@@ -250,7 +235,7 @@ router.post('/:id/patients', async (req, res) => {
         throw new Error('No available beds in this hospital.');
       }
 
-      // Step 2: Insert the patient
+      //  Insert the patient
       const patientResult = await new sql.Request(transaction)
         .input('hospital_id', sql.Int,          hospital_id)
         .input('report_id',   sql.Int,          report_id || null)
@@ -264,7 +249,7 @@ router.post('/:id/patients', async (req, res) => {
           SELECT CAST(SCOPE_IDENTITY() AS INT) AS patient_id;
         `);
 
-      // Step 3: Decrease available beds by 1
+      //  Decrease available beds by 1
       await new sql.Request(transaction)
         .input('hospital_id', sql.Int, hospital_id)
         .query(`
