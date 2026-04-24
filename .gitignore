@@ -1,18 +1,4 @@
-# ===== .NET / C# =====
-bin/
-obj/
-*.exe
-*.dll
-*.pdb
-*.user
-*.suo
-*.cache
-*.log
-*.vs/
-.vscode/
-launchSettings.json
-
-# ===== Node / React =====
+# ===== Node / Backend & React =====
 node_modules/
 dist/
 build/
@@ -30,6 +16,7 @@ desktop.ini
 
 # ===== IDE =====
 .idea/
+.vscode/
 *.swp
 *.swo
 *~

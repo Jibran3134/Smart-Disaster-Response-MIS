@@ -1,107 +1,340 @@
+// ============================================================
+// finance.js — Financial Transactions, Budgets & Donors
+// ============================================================
+// Endpoints:
+//   GET    /api/finance/transactions        → List all financial transactions
+//   GET    /api/finance/transactions/:id    → Get one transaction
+//   PUT    /api/finance/transactions/:id    → Update transaction status
+//
+//   GET    /api/finance/donors              → List all donors
+//   POST   /api/finance/donors             → Create a donor
+//
+//   GET    /api/finance/budgets             → List all budgets
+//   POST   /api/finance/budgets            → Create a budget
+//   PUT    /api/finance/budgets/:id        → Update a budget
+//
+//   GET    /api/finance/summary             → Financial summary report
+//
+// Access: Administrator, Finance Officer
+// Note: Creating transactions is done via /api/transactions/financial-entry
+//       (the transactional route in transactions.js)
+// ============================================================
+
 const express = require('express');
 const { getPool, sql } = require('../config/db');
+
 const router = express.Router();
 
-router.get('/', async (_req, res) => {
+
+// ════════════════════════════════════════════════════════════
+//  FINANCIAL TRANSACTIONS
+// ════════════════════════════════════════════════════════════
+
+// ── GET /api/finance/transactions ──
+// List all financial transactions (optional filters: ?type=Donation&status=Completed&event_id=1)
+router.get('/transactions', async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.request().query('SELECT * FROM FinancialTransactions ORDER BY TransactionDate DESC');
+    const { type, status, event_id } = req.query;
+
+    let query = `
+      SELECT ft.*,
+             u.full_name AS user_name,
+             d.donor_name,
+             de.event_name
+      FROM Financial_Transaction ft
+      LEFT JOIN Users u ON ft.made_by_user = u.user_id
+      LEFT JOIN Donor d ON ft.made_by_donor = d.donor_id
+      LEFT JOIN Disaster_Event de ON ft.event_id = de.event_id
+      WHERE 1=1
+    `;
+    const request = pool.request();
+
+    if (type) {
+      query += ' AND ft.transaction_type = @type';
+      request.input('type', sql.VarChar(20), type);
+    }
+    if (status) {
+      query += ' AND ft.status = @status';
+      request.input('status', sql.VarChar(20), status);
+    }
+    if (event_id) {
+      query += ' AND ft.event_id = @event_id';
+      request.input('event_id', sql.Int, event_id);
+    }
+
+    query += ' ORDER BY ft.transaction_date DESC';
+
+    const result = await request.query(query);
     return res.json(result.recordset);
+
   } catch (err) {
+    console.error('Get transactions error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-router.get('/summary', async (_req, res) => {
+
+// ── GET /api/finance/transactions/:id ──
+// Get a single transaction with its audit log
+router.get('/transactions/:id', async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.request().query('SELECT * FROM vw_FinanceSummary');
+
+    // Get transaction
+    const txResult = await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query(`
+        SELECT ft.*,
+               u.full_name AS user_name,
+               d.donor_name,
+               de.event_name
+        FROM Financial_Transaction ft
+        LEFT JOIN Users u ON ft.made_by_user = u.user_id
+        LEFT JOIN Donor d ON ft.made_by_donor = d.donor_id
+        LEFT JOIN Disaster_Event de ON ft.event_id = de.event_id
+        WHERE ft.transaction_id = @id
+      `);
+
+    if (txResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+
+    // Get audit log entries for this transaction
+    const logResult = await pool.request()
+      .input('id', sql.Int, req.params.id)
+      .query(`
+        SELECT ftl.*, u.full_name AS performed_by_name
+        FROM Financial_Transaction_Log ftl
+        JOIN Users u ON ftl.performed_by = u.user_id
+        WHERE ftl.transaction_id = @id
+        ORDER BY ftl.log_time DESC
+      `);
+
+    return res.json({
+      ...txResult.recordset[0],
+      audit_log: logResult.recordset
+    });
+
+  } catch (err) {
+    console.error('Get transaction error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+// ── PUT /api/finance/transactions/:id ──
+// Update transaction status (e.g. Pending → Completed)
+// Body: { status }
+router.put('/transactions/:id', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ error: 'status is required.' });
+    }
+
+    const pool = getPool();
+    const result = await pool.request()
+      .input('id',     sql.Int,         req.params.id)
+      .input('status', sql.VarChar(20), status)
+      .query(`
+        UPDATE Financial_Transaction
+        SET status = @status
+        WHERE transaction_id = @id
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Transaction not found.' });
+    }
+
+    return res.json({ message: 'Transaction status updated.' });
+
+  } catch (err) {
+    console.error('Update transaction error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+// ════════════════════════════════════════════════════════════
+//  DONORS
+// ════════════════════════════════════════════════════════════
+
+// ── GET /api/finance/donors ──
+// List all donors
+router.get('/donors', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT d.*,
+             (SELECT COUNT(*) FROM Financial_Transaction ft WHERE ft.made_by_donor = d.donor_id) AS total_donations,
+             (SELECT ISNULL(SUM(ft.amount), 0) FROM Financial_Transaction ft WHERE ft.made_by_donor = d.donor_id) AS total_amount
+      FROM Donor d
+      ORDER BY d.donor_name
+    `);
+
     return res.json(result.recordset);
+
   } catch (err) {
+    console.error('Get donors error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-router.get('/dashboard', async (_req, res) => {
-  try {
-    const pool = getPool();
-    const result = await pool.request().query('SELECT * FROM vw_DashboardStats');
-    return res.json(result.recordset[0] || {});
-  } catch (err) {
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
 
-router.get('/:id', async (req, res) => {
+// ── POST /api/finance/donors ──
+// Create a new donor
+// Body: { donor_name, donor_type, contact_info }
+router.post('/donors', async (req, res) => {
   try {
-    const pool = getPool();
-    const result = await pool.request()
-      .input('id', sql.Int, parseInt(req.params.id))
-      .query('SELECT * FROM FinancialTransactions WHERE TransactionId = @id');
-    const row = result.recordset[0];
-    return row ? res.json(row) : res.status(404).json({ error: 'Not found.' });
-  } catch (err) {
-    return res.status(500).json({ error: 'Internal server error.' });
-  }
-});
+    const { donor_name, donor_type, contact_info } = req.body;
 
-router.post('/', async (req, res) => {
-  try {
-    const { EmergencyId, Type, Amount, Currency, Description, ApprovedBy, Status } = req.body;
+    if (!donor_name) {
+      return res.status(400).json({ error: 'donor_name is required.' });
+    }
+
     const pool = getPool();
     const result = await pool.request()
-      .input('EmergencyId', sql.Int, EmergencyId || null)
-      .input('Type', sql.NVarChar, Type)
-      .input('Amount', sql.Decimal(18,2), Amount)
-      .input('Currency', sql.NVarChar, Currency || 'USD')
-      .input('Description', sql.NVarChar, Description)
-      .input('ApprovedBy', sql.Int, ApprovedBy || null)
-      .input('Status', sql.NVarChar, Status || 'Pending')
-      .query(`INSERT INTO FinancialTransactions (EmergencyId, Type, Amount, Currency, Description, ApprovedBy, Status)
-              VALUES (@EmergencyId, @Type, @Amount, @Currency, @Description, @ApprovedBy, @Status);
-              SELECT CAST(SCOPE_IDENTITY() AS INT) AS transactionId;`);
-    return res.json({ transactionId: result.recordset[0].transactionId });
+      .input('donor_name',   sql.VarChar(100), donor_name)
+      .input('donor_type',   sql.VarChar(50),  donor_type || null)
+      .input('contact_info', sql.VarChar(100), contact_info || null)
+      .query(`
+        INSERT INTO Donor (donor_name, donor_type, contact_info)
+        VALUES (@donor_name, @donor_type, @contact_info);
+
+        SELECT CAST(SCOPE_IDENTITY() AS INT) AS donor_id;
+      `);
+
+    return res.status(201).json({
+      message: 'Donor created.',
+      donor_id: result.recordset[0].donor_id
+    });
+
   } catch (err) {
+    console.error('Create donor error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-router.put('/:id', async (req, res) => {
+
+// ════════════════════════════════════════════════════════════
+//  BUDGETS
+// ════════════════════════════════════════════════════════════
+
+// ── GET /api/finance/budgets ──
+// List all budgets with event info
+router.get('/budgets', async (req, res) => {
   try {
-    const { EmergencyId, Type, Amount, Currency, Description, ApprovedBy, Status } = req.body;
     const pool = getPool();
-    const result = await pool.request()
-      .input('TransactionId', sql.Int, parseInt(req.params.id))
-      .input('EmergencyId', sql.Int, EmergencyId || null)
-      .input('Type', sql.NVarChar, Type)
-      .input('Amount', sql.Decimal(18,2), Amount)
-      .input('Currency', sql.NVarChar, Currency)
-      .input('Description', sql.NVarChar, Description)
-      .input('ApprovedBy', sql.Int, ApprovedBy || null)
-      .input('Status', sql.NVarChar, Status)
-      .query(`UPDATE FinancialTransactions SET EmergencyId=@EmergencyId, Type=@Type,
-              Amount=@Amount, Currency=@Currency, Description=@Description,
-              ApprovedBy=@ApprovedBy, Status=@Status WHERE TransactionId=@TransactionId`);
-    return result.rowsAffected[0] === 0
-      ? res.status(404).json({ error: 'Not found.' })
-      : res.json({ message: 'Updated.' });
+    const result = await pool.request().query(`
+      SELECT b.*, de.event_name, de.disaster_type, de.status AS event_status
+      FROM Budget b
+      JOIN Disaster_Event de ON b.event_id = de.event_id
+      ORDER BY de.start_date DESC
+    `);
+
+    return res.json(result.recordset);
+
   } catch (err) {
+    console.error('Get budgets error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-router.delete('/:id', async (req, res) => {
+
+// ── POST /api/finance/budgets ──
+// Create a new budget for a disaster event
+// Body: { event_id, total_allocated }
+router.post('/budgets', async (req, res) => {
   try {
+    const { event_id, total_allocated } = req.body;
+
+    if (!event_id || !total_allocated) {
+      return res.status(400).json({ error: 'event_id and total_allocated are required.' });
+    }
+
     const pool = getPool();
     const result = await pool.request()
-      .input('id', sql.Int, parseInt(req.params.id))
-      .query('DELETE FROM FinancialTransactions WHERE TransactionId = @id');
-    return result.rowsAffected[0] === 0
-      ? res.status(404).json({ error: 'Not found.' })
-      : res.json({ message: 'Deleted.' });
+      .input('event_id',        sql.Int,            event_id)
+      .input('total_allocated', sql.Decimal(12, 2), total_allocated)
+      .query(`
+        INSERT INTO Budget (event_id, total_allocated)
+        VALUES (@event_id, @total_allocated);
+
+        SELECT CAST(SCOPE_IDENTITY() AS INT) AS budget_id;
+      `);
+
+    return res.status(201).json({
+      message: 'Budget created.',
+      budget_id: result.recordset[0].budget_id
+    });
+
   } catch (err) {
+    console.error('Create budget error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+
+
+// ── PUT /api/finance/budgets/:id ──
+// Update a budget
+// Body: { total_allocated, total_spent }
+router.put('/budgets/:id', async (req, res) => {
+  try {
+    const { total_allocated, total_spent } = req.body;
+    const pool = getPool();
+
+    const result = await pool.request()
+      .input('id',              sql.Int,            req.params.id)
+      .input('total_allocated', sql.Decimal(12, 2), total_allocated)
+      .input('total_spent',     sql.Decimal(12, 2), total_spent)
+      .query(`
+        UPDATE Budget
+        SET total_allocated = COALESCE(@total_allocated, total_allocated),
+            total_spent     = COALESCE(@total_spent, total_spent)
+        WHERE budget_id = @id
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Budget not found.' });
+    }
+
+    return res.json({ message: 'Budget updated.' });
+
+  } catch (err) {
+    console.error('Update budget error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+// ════════════════════════════════════════════════════════════
+//  FINANCIAL SUMMARY (MIS Report)
+// ════════════════════════════════════════════════════════════
+
+// ── GET /api/finance/summary ──
+// Returns aggregated financial summary
+router.get('/summary', async (req, res) => {
+  try {
+    const pool = getPool();
+
+    const result = await pool.request().query(`
+      SELECT
+        (SELECT ISNULL(SUM(amount), 0) FROM Financial_Transaction WHERE transaction_type = 'Donation'    AND status = 'Completed') AS total_donations,
+        (SELECT ISNULL(SUM(amount), 0) FROM Financial_Transaction WHERE transaction_type = 'Expense'     AND status = 'Completed') AS total_expenses,
+        (SELECT ISNULL(SUM(amount), 0) FROM Financial_Transaction WHERE transaction_type = 'Procurement' AND status = 'Completed') AS total_procurement,
+        (SELECT COUNT(*)               FROM Financial_Transaction WHERE status = 'Pending')    AS pending_transactions,
+        (SELECT COUNT(*)               FROM Financial_Transaction WHERE status = 'Completed')  AS completed_transactions
+    `);
+
+    return res.json(result.recordset[0]);
+
+  } catch (err) {
+    console.error('Get summary error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 
 module.exports = router;

@@ -1,23 +1,35 @@
+// ============================================================
+// db.js — Database Connection (SQL Server using mssql package)
+// ============================================================
+// This file connects to SQL Server and exports helper functions.
+// We use a connection pool so the app reuses one connection.
+// ============================================================
+
 const sql = require('mssql');
 
-// Parse server\instance format (e.g. "Jibran-PC\SQLEXPRESS")
+// ── Parse server name ──
+// Your .env might say "JIBRAN-PC\SQLEXPRESS"
+// We need to split that into server + instance
 const serverRaw = process.env.DB_SERVER || 'localhost';
 const parts = serverRaw.split('\\');
-const serverName = parts[0];
-const instanceName = parts.length > 1 ? parts[1] : undefined;
+const serverName = parts[0];                           // e.g. "JIBRAN-PC"
+const instanceName = parts.length > 1 ? parts[1] : undefined; // e.g. "SQLEXPRESS"
 
+// ── Connection config ──
 const config = {
   server:   serverName,
   database: process.env.DB_NAME || 'DisasterResponseDB',
   options: {
-    encrypt: false,
-    trustServerCertificate: true,
-    instanceName: instanceName,  // e.g. "SQLEXPRESS"
+    encrypt: false,                    // Not needed for local dev
+    trustServerCertificate: true,      // Trust self-signed certs
+    instanceName: instanceName,        // e.g. "SQLEXPRESS"
   },
-  port: instanceName ? undefined : 1433,  // Let SQL Browser handle port for named instances
+  // If using a named instance, let SQL Browser handle the port
+  port: instanceName ? undefined : 1433,
 };
 
-// Use Windows Authentication (trusted) or SQL login
+// ── Authentication ──
+// Use Windows Auth or SQL login based on .env
 if (process.env.DB_TRUSTED_CONNECTION === 'true') {
   config.options.trustedConnection = true;
 } else {
@@ -25,11 +37,11 @@ if (process.env.DB_TRUSTED_CONNECTION === 'true') {
   config.password = process.env.DB_PASSWORD;
 }
 
+// ── Connection pool (we only create one) ──
 let pool;
 
 /**
- * Initialise and cache the connection pool.
- * @returns {Promise<sql.ConnectionPool>}
+ * Connect to the database. Call this once when the server starts.
  */
 async function connectDB() {
   if (!pool) {
@@ -39,8 +51,7 @@ async function connectDB() {
 }
 
 /**
- * Get the cached pool (must call connectDB first).
- * @returns {sql.ConnectionPool}
+ * Get the connection pool. Must call connectDB() first.
  */
 function getPool() {
   if (!pool) throw new Error('Database not connected. Call connectDB() first.');
