@@ -69,7 +69,7 @@ CREATE TABLE Emergency_Report (
     CONSTRAINT chk_report_status CHECK (status IN ('Open','In Progress','Resolved','Closed')),
 
     CONSTRAINT fk_report_event FOREIGN KEY (event_id) REFERENCES Disaster_Event(event_id),
-    CONSTRAINT fk_report_user FOREIGN KEY (reported_by) REFERENCES "Users"(user_id)
+    CONSTRAINT fk_report_user FOREIGN KEY (reported_by) REFERENCES [Users](user_id)
 );
 
 CREATE TABLE Patient (
@@ -123,8 +123,8 @@ CREATE TABLE Approval_Request (
         status IN ('Pending','Approved','Rejected','Cancelled')
     ),
 
-    CONSTRAINT fk_req_user FOREIGN KEY (requested_by) REFERENCES "Users"(user_id),
-    CONSTRAINT fk_app_user FOREIGN KEY (approved_by) REFERENCES "Users"(user_id)
+    CONSTRAINT fk_req_user FOREIGN KEY (requested_by) REFERENCES [Users](user_id),
+    CONSTRAINT fk_app_user FOREIGN KEY (approved_by) REFERENCES [Users](user_id)
 );
 
 CREATE TABLE Team_Assignment (
@@ -147,7 +147,7 @@ CREATE TABLE Warehouse (
     street VARCHAR(200),
     city VARCHAR(200) NOT NULL,
 
-    CONSTRAINT fk_wh_user FOREIGN KEY (managed_by) REFERENCES "Users"(user_id)
+    CONSTRAINT fk_wh_user FOREIGN KEY (managed_by) REFERENCES [Users](user_id)
 );
 
 CREATE TABLE Resource (
@@ -185,7 +185,7 @@ CREATE TABLE Allocation (
     ),
 
     CONSTRAINT fk_alloc_report FOREIGN KEY (report_id) REFERENCES Emergency_Report(report_id),
-    CONSTRAINT fk_alloc_user FOREIGN KEY (allocated_by) REFERENCES "Users"(user_id),
+    CONSTRAINT fk_alloc_user FOREIGN KEY (allocated_by) REFERENCES [Users](user_id),
     CONSTRAINT fk_alloc_wh FOREIGN KEY (warehouse_id) REFERENCES Warehouse(warehouse_id)
 );
 
@@ -224,7 +224,7 @@ CREATE TABLE Financial_Transaction (
         (made_by_user IS NULL AND made_by_donor IS NOT NULL)
     ),
 
-    CONSTRAINT fk_ft_user FOREIGN KEY (made_by_user) REFERENCES "Users"(user_id),
+    CONSTRAINT fk_ft_user FOREIGN KEY (made_by_user) REFERENCES [Users](user_id),
     CONSTRAINT fk_ft_donor FOREIGN KEY (made_by_donor) REFERENCES Donor(donor_id),
     CONSTRAINT fk_ft_event FOREIGN KEY (event_id) REFERENCES Disaster_Event(event_id)
 );
@@ -235,7 +235,7 @@ CREATE TABLE Procurement (
     transaction_id INT NULL,
     procurement_date DATETIME DEFAULT GETDATE(),
 
-    CONSTRAINT fk_proc_user FOREIGN KEY (procured_by) REFERENCES "Users"(user_id),
+    CONSTRAINT fk_proc_user FOREIGN KEY (procured_by) REFERENCES [Users](user_id),
     CONSTRAINT fk_proc_wh FOREIGN KEY (warehouse_id) REFERENCES Warehouse(warehouse_id),
     CONSTRAINT fk_proc_ft FOREIGN KEY (transaction_id) REFERENCES Financial_Transaction(transaction_id)
 );
@@ -269,7 +269,7 @@ CREATE TABLE Financial_Transaction_Log (
     log_time DATETIME DEFAULT GETDATE(),
 
     CONSTRAINT fk_ftl_trans FOREIGN KEY (transaction_id) REFERENCES Financial_Transaction(transaction_id),
-    CONSTRAINT fk_ftl_user FOREIGN KEY (performed_by) REFERENCES "Users"(user_id)
+    CONSTRAINT fk_ftl_user FOREIGN KEY (performed_by) REFERENCES [Users](user_id)
 );
 
 CREATE TABLE Audit_Log (
@@ -282,5 +282,5 @@ CREATE TABLE Audit_Log (
     new_value VARCHAR(MAX),
     log_time DATETIME DEFAULT GETDATE(),
 
-    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES "Users"(user_id)
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES [Users](user_id)
 );
