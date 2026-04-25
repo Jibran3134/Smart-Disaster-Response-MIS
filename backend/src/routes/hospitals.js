@@ -1,12 +1,12 @@
 // Endpoints:
-//   GET    /api/hospitals/                  → List all hospitals
-//   GET    /api/hospitals/:id               → Get one hospital (with patients)
-//   POST   /api/hospitals/                  → Create a hospital
-//   PUT    /api/hospitals/:id               → Update a hospital
+//   GET    /api/hospitals/                  -> List all hospitals
+//   GET    /api/hospitals/:id               -> Get one hospital (with patients)
+//   POST   /api/hospitals/                  -> Create a hospital
+//   PUT    /api/hospitals/:id               -> Update a hospital
 //
-//   GET    /api/hospitals/:id/patients      → List patients in a hospital
-//   POST   /api/hospitals/:id/patients      → Admit a patient
-//   PUT    /api/hospitals/patients/:id      → Update patient info
+//   GET    /api/hospitals/:id/patients      -> List patients in a hospital
+//   POST   /api/hospitals/:id/patients      -> Admit a patient (calls sp_AdmitPatient)
+//   PUT    /api/hospitals/patients/:id      -> Update patient info
 //
 // Access: Administrator, Emergency Operator
 
@@ -15,16 +15,13 @@ const { getPool, sql } = require('../config/db');
 
 const router = express.Router();
 
-//  GET /api/hospitals/ 
-// List all hospitals (optional filter: ?status=Operational&city=Lahore)
+//  GET /api/hospitals/
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
     const { status, city } = req.query;
-
     let query = 'SELECT * FROM Hospital WHERE 1=1';
     const request = pool.request();
-
     if (status) {
       query += ' AND status = @status';
       request.input('status', sql.VarChar(30), status);
@@ -33,26 +30,20 @@ router.get('/', async (req, res) => {
       query += ' AND city = @city';
       request.input('city', sql.VarChar(200), city);
     }
-
     query += ' ORDER BY hospital_name';
-
     const result = await request.query(query);
     return res.json(result.recordset);
-
   } catch (err) {
     console.error('Get hospitals error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-
-//  GET /api/hospitals/patients/:patientId 
-// Update a patient record
+//  PUT /api/hospitals/patients/:patientId
 router.put('/patients/:patientId', async (req, res) => {
   try {
     const { condition, hospital_id } = req.body;
     const pool = getPool();
-
     const result = await pool.request()
       .input('id',          sql.Int,          req.params.patientId)
       .input('condition',   sql.VarChar(100), condition)
@@ -63,26 +54,20 @@ router.put('/patients/:patientId', async (req, res) => {
             hospital_id = COALESCE(@hospital_id, hospital_id)
         WHERE patient_id = @id
       `);
-
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: 'Patient not found.' });
     }
-
     return res.json({ message: 'Patient updated.' });
-
   } catch (err) {
     console.error('Update patient error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-
-//  GET /api/hospitals/:id 
-// Get a single hospital with patient count
+//  GET /api/hospitals/:id
 router.get('/:id', async (req, res) => {
   try {
     const pool = getPool();
-
     const result = await pool.request()
       .input('id', sql.Int, req.params.id)
       .query(`
@@ -91,33 +76,25 @@ router.get('/:id', async (req, res) => {
         FROM Hospital h
         WHERE h.hospital_id = @id
       `);
-
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Hospital not found.' });
     }
-
     return res.json(result.recordset[0]);
-
   } catch (err) {
     console.error('Get hospital error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-
-//  POST /api/hospitals/ 
-// Create a new hospital
-// Body: { hospital_name, total_beds, available_beds, address, city }
+//  POST /api/hospitals/
 router.post('/', async (req, res) => {
   try {
     const { hospital_name, total_beds, available_beds, address, city } = req.body;
-
     if (!hospital_name || !total_beds || !address || !city) {
       return res.status(400).json({
         error: 'hospital_name, total_beds, address, and city are required.'
       });
     }
-
     const pool = getPool();
     const result = await pool.request()
       .input('hospital_name', sql.VarChar(100), hospital_name)
@@ -128,30 +105,23 @@ router.post('/', async (req, res) => {
       .query(`
         INSERT INTO Hospital (hospital_name, total_beds, available_beds, address, city)
         VALUES (@hospital_name, @total_beds, @available_beds, @address, @city);
-
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS hospital_id;
       `);
-
     return res.status(201).json({
       message: 'Hospital created.',
       hospital_id: result.recordset[0].hospital_id
     });
-
   } catch (err) {
     console.error('Create hospital error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-
-//  PUT /api/hospitals/:id 
-// Update a hospital (e.g. available beds, status)
-// Body: { hospital_name, total_beds, available_beds, address, city }
+//  PUT /api/hospitals/:id
 router.put('/:id', async (req, res) => {
   try {
     const { hospital_name, total_beds, available_beds, address, city } = req.body;
     const pool = getPool();
-
     const result = await pool.request()
       .input('id',             sql.Int,          req.params.id)
       .input('hospital_name',  sql.VarChar(100), hospital_name)
@@ -168,21 +138,17 @@ router.put('/:id', async (req, res) => {
             city           = COALESCE(@city, city)
         WHERE hospital_id = @id
       `);
-
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({ error: 'Hospital not found.' });
     }
-
     return res.json({ message: 'Hospital updated.' });
-
   } catch (err) {
     console.error('Update hospital error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-//  GET /api/hospitals/:id/patients 
-// List all patients in a specific hospital
+//  GET /api/hospitals/:id/patients
 router.get('/:id/patients', async (req, res) => {
   try {
     const pool = getPool();
@@ -195,17 +161,14 @@ router.get('/:id/patients', async (req, res) => {
         WHERE p.hospital_id = @hospital_id
         ORDER BY p.admission_time DESC
       `);
-
     return res.json(result.recordset);
-
   } catch (err) {
     console.error('Get patients error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
-
-//  POST /api/hospitals/:id/patients 
+//  POST /api/hospitals/:id/patients
 // Admit a patient to a hospital
 // Body: { patient_name, dob, condition, report_id }
 router.post('/:id/patients', async (req, res) => {
@@ -276,5 +239,5 @@ router.post('/:id/patients', async (req, res) => {
   }
 });
 
-
 module.exports = router;
+

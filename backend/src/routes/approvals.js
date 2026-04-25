@@ -1,17 +1,17 @@
 // Approval-Based Workflow
-// Critical actions must go through: Request (Pending) → Approve/Reject → Execute
+// Critical actions must go through: Request (Pending) -> Approve/Reject -> Execute
 //
 // Request endpoints (create Pending approval):
-//   POST /api/approvals/request-allocation   → Resource distribution request
-//   POST /api/approvals/request-deployment   → Rescue team deployment request
-//   POST /api/approvals/request-financial    → Financial approval request
+//   POST /api/approvals/request-allocation   -> Resource distribution request
+//   POST /api/approvals/request-deployment   -> Rescue team deployment request
+//   POST /api/approvals/request-financial    -> Financial approval request
 //
 // Management endpoints:
-//   GET    /api/approvals/                   → List all approval requests
-//   GET    /api/approvals/history            → Approval history (approved/rejected only)
-//   GET    /api/approvals/:id               → Get one approval request
-//   PUT    /api/approvals/:id/approve       → Approve + EXECUTE the action
-//   PUT    /api/approvals/:id/reject        → Reject the request
+//   GET    /api/approvals/                   -> List all approval requests
+//   GET    /api/approvals/history            -> Approval history (approved/rejected only)
+//   GET    /api/approvals/:id               -> Get one approval request
+//   PUT    /api/approvals/:id/approve       -> Approve + EXECUTE (calls sp_ApproveAndExecute)
+//   PUT    /api/approvals/:id/reject        -> Reject the request
 //
 // Access: Administrator, Emergency Operator, Finance Officer
 
@@ -23,12 +23,10 @@ const router = express.Router();
 
 
 // GET /api/approvals/
-// List all approval requests (optional filters: ?status=Pending&request_type=Resource Distribution)
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
     const { status, request_type } = req.query;
-
     let query = `
       SELECT ar.*,
              req.full_name AS requested_by_name,
@@ -39,7 +37,6 @@ router.get('/', async (req, res) => {
       WHERE 1=1
     `;
     const request = pool.request();
-
     if (status) {
       query += ' AND ar.status = @status';
       request.input('status', sql.VarChar(20), status);
@@ -48,12 +45,9 @@ router.get('/', async (req, res) => {
       query += ' AND ar.request_type = @request_type';
       request.input('request_type', sql.VarChar(50), request_type);
     }
-
     query += ' ORDER BY ar.request_time DESC';
-
     const result = await request.query(query);
     return res.json(result.recordset);
-
   } catch (err) {
     console.error('Get approvals error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -62,7 +56,6 @@ router.get('/', async (req, res) => {
 
 
 // GET /api/approvals/history
-// Returns only approved/rejected requests (approval history trail)
 router.get('/history', async (req, res) => {
   try {
     const pool = getPool();
@@ -77,9 +70,7 @@ router.get('/history', async (req, res) => {
         WHERE ar.status IN ('Approved', 'Rejected')
         ORDER BY ar.request_time DESC
       `);
-
     return res.json(result.recordset);
-
   } catch (err) {
     console.error('Get approval history error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -102,17 +93,13 @@ router.get('/:id', async (req, res) => {
         LEFT JOIN Users rev ON ar.approved_by = rev.user_id
         WHERE ar.request_id = @id
       `);
-
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Approval request not found.' });
     }
-
-    // Parse the payload from remarks so the caller can see the original request data
+    // Parse the payload from remarks
     const row = result.recordset[0];
-    try { row.payload = JSON.parse(row.remarks); } catch (_) { /* remarks is plain text */ }
-
+    try { row.payload = JSON.parse(row.remarks); } catch (_) { /* plain text */ }
     return res.json(row);
-
   } catch (err) {
     console.error('Get approval error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -121,24 +108,18 @@ router.get('/:id', async (req, res) => {
 
 
 // POST /api/approvals/request-allocation
-// Request resource distribution (stored as Pending, not executed yet)
-// Body: { report_id, warehouse_id, resource_id, quantity }
 router.post('/request-allocation', async (req, res) => {
   try {
     const { report_id, warehouse_id, resource_id, quantity } = req.body;
-
     if (!report_id || !warehouse_id || !resource_id || !quantity) {
       return res.status(400).json({
         error: 'report_id, warehouse_id, resource_id, and quantity are required.'
       });
     }
-
     const requested_by = req.user.userId;
-
     const payload = JSON.stringify({
       report_id, allocated_by: requested_by, warehouse_id, resource_id, quantity
     });
-
     const pool = getPool();
     const result = await pool.request()
       .input('requested_by', sql.Int, requested_by)
@@ -147,16 +128,13 @@ router.post('/request-allocation', async (req, res) => {
       .query(`
         INSERT INTO Approval_Request (requested_by, request_type, remarks)
         VALUES (@requested_by, @request_type, @remarks);
-
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
-
     return res.status(201).json({
       message: 'Resource distribution request submitted for approval.',
       request_id: result.recordset[0].request_id,
       status: 'Pending'
     });
-
   } catch (err) {
     console.error('Request allocation error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -165,20 +143,14 @@ router.post('/request-allocation', async (req, res) => {
 
 
 // POST /api/approvals/request-deployment
-// Request rescue team deployment (stored as Pending, not executed yet)
-// Body: { team_id, report_id }
 router.post('/request-deployment', async (req, res) => {
   try {
     const { team_id, report_id } = req.body;
-
     if (!team_id || !report_id) {
       return res.status(400).json({ error: 'team_id and report_id are required.' });
     }
-
     const requested_by = req.user.userId;
-
     const payload = JSON.stringify({ team_id, report_id });
-
     const pool = getPool();
     const result = await pool.request()
       .input('requested_by', sql.Int, requested_by)
@@ -187,16 +159,13 @@ router.post('/request-deployment', async (req, res) => {
       .query(`
         INSERT INTO Approval_Request (requested_by, request_type, remarks)
         VALUES (@requested_by, @request_type, @remarks);
-
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
-
     return res.status(201).json({
       message: 'Rescue deployment request submitted for approval.',
       request_id: result.recordset[0].request_id,
       status: 'Pending'
     });
-
   } catch (err) {
     console.error('Request deployment error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -205,30 +174,23 @@ router.post('/request-deployment', async (req, res) => {
 
 
 // POST /api/approvals/request-financial
-// Request financial approval (stored as Pending, not executed yet)
-// Body: { made_by_user OR made_by_donor, event_id, amount, transaction_type }
 router.post('/request-financial', async (req, res) => {
   try {
     const { made_by_user, made_by_donor, event_id, amount, transaction_type } = req.body;
-
     if (!amount || !transaction_type) {
       return res.status(400).json({ error: 'amount and transaction_type are required.' });
     }
     if ((!made_by_user && !made_by_donor) || (made_by_user && made_by_donor)) {
       return res.status(400).json({ error: 'Provide either made_by_user OR made_by_donor (not both).' });
     }
-
     const requested_by = req.user.userId;
-
     const payload = JSON.stringify({
       made_by_user: made_by_user || null,
       made_by_donor: made_by_donor || null,
       event_id: event_id || null,
-      amount,
-      transaction_type,
+      amount, transaction_type,
       performed_by: requested_by
     });
-
     const pool = getPool();
     const result = await pool.request()
       .input('requested_by', sql.Int, requested_by)
@@ -237,16 +199,13 @@ router.post('/request-financial', async (req, res) => {
       .query(`
         INSERT INTO Approval_Request (requested_by, request_type, remarks)
         VALUES (@requested_by, @request_type, @remarks);
-
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
-
     return res.status(201).json({
       message: 'Financial approval request submitted.',
       request_id: result.recordset[0].request_id,
       status: 'Pending'
     });
-
   } catch (err) {
     console.error('Request financial error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
@@ -254,18 +213,14 @@ router.post('/request-financial', async (req, res) => {
 });
 
 
-// POST /api/approvals/  (generic — for any other approval type)
-// Body: { request_type, reference_id, remarks }
+// POST /api/approvals/ (generic)
 router.post('/', async (req, res) => {
   try {
     const { request_type, reference_id, remarks } = req.body;
-
     if (!request_type) {
       return res.status(400).json({ error: 'request_type is required.' });
     }
-
     const requested_by = req.user.userId;
-
     const pool = getPool();
     const result = await pool.request()
       .input('requested_by', sql.Int, requested_by)
@@ -275,21 +230,19 @@ router.post('/', async (req, res) => {
       .query(`
         INSERT INTO Approval_Request (requested_by, request_type, reference_id, remarks)
         VALUES (@requested_by, @request_type, @reference_id, @remarks);
-
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
-      `);//SCOPE_IDENTITY() is the newly auto generated id 
-
+      `);
     return res.status(201).json({
       message: 'Approval request created.',
       request_id: result.recordset[0].request_id,
       status: 'Pending'
     });
-
   } catch (err) {
     console.error('Create approval error:', err.message);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+
 
 // PUT /api/approvals/:id/approve
 router.put('/:id/approve',
@@ -500,6 +453,8 @@ router.put('/:id/approve',
   }
 );
 
+
+
 // PUT /api/approvals/:id/reject
 router.put('/:id/reject',
   requireRoles('Administrator', 'Emergency Operator', 'Finance Officer'),
@@ -507,7 +462,6 @@ router.put('/:id/reject',
     try {
       const { remarks } = req.body;
       const approved_by = req.user.userId;
-
       const pool = getPool();
 
       // Check it's still Pending
