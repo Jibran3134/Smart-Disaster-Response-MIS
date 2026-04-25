@@ -284,3 +284,169 @@ CREATE TABLE Audit_Log (
 
     CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES "Users"(user_id)
 );
+
+
+
+-- STORED PROCEDURES — ACID TRANSACTIONS
+-- All multi-step operations use BEGIN TRAN / COMMIT / ROLLBACK inside
+
+GO
+
+-- SP 1: sp_AllocateResource
+-- Steps: Check stock -> Create Allocation -> Create detail row  Deduct inventory
+CREATE OR ALTER PROCEDURE sp_AllocateResource
+    @report_id      INT,
+    @allocated_by   INT,
+    @warehouse_id   INT,
+    @resource_id    INT,
+    @quantity        INT,
+    @allocation_id  INT           OUTPUT,
+    @remaining_stock INT          OUTPUT,
+    @error_message  VARCHAR(500)  OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @allocation_id  = NULL;
+    SET @remaining_stock = NULL;
+    SET @error_message  = NULL;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @current_stock INT;
+        SELECT @current_stock = quantity_available
+        FROM Inventory
+        WHERE warehouse_id = @warehouse_id AND resource_id = @resource_id;
+
+        IF @current_stock IS NULL
+            RAISERROR('No inventory record found for warehouse %d, resource %d.', 16, 1, @warehouse_id, @resource_id);
+
+        IF @current_stock < @quantity
+            RAISERROR('Not enough stock. Available: %d, Requested: %d.', 16, 1, @current_stock, @quantity);
+
+        INSERT INTO Allocation (report_id, allocated_by, warehouse_id, status)
+        VALUES (@report_id, @allocated_by, @warehouse_id, 'Dispatched');
+
+        SET @allocation_id = SCOPE_IDENTITY();
+
+        INSERT INTO Resource_Allocation (allocation_id, resource_id, requested_qty, approved_qty)
+        VALUES (@allocation_id, @resource_id, @quantity, @quantity);
+
+        UPDATE Inventory
+        SET quantity_available = quantity_available - @quantity
+        WHERE warehouse_id = @warehouse_id AND resource_id = @resource_id;
+
+        SET @remaining_stock = @current_stock - @quantity;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        SET @error_message = ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+
+
+-- SP 2: sp_AssignTeam
+-- Steps: Check availability -> Insert assignment -> Mark team Assigned -> Report In Progress
+
+CREATE OR ALTER PROCEDURE sp_AssignTeam
+    @team_id        INT,
+    @report_id      INT,
+    @error_message  VARCHAR(500)  OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @error_message = NULL;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        DECLARE @team_status VARCHAR(20);
+        SELECT @team_status = availability_status
+        FROM Rescue_Team WHERE team_id = @team_id;
+
+        IF @team_status IS NULL
+            RAISERROR('Team with id %d not found.', 16, 1, @team_id);
+
+        IF @team_status <> 'Available'
+            RAISERROR('Team is not available. Current status: %s.', 16, 1, @team_status);
+
+        INSERT INTO Team_Assignment (team_id, report_id, assigned_at)
+        VALUES (@team_id, @report_id, GETDATE());
+
+        UPDATE Rescue_Team SET availability_status = 'Assigned' WHERE team_id = @team_id;
+
+        UPDATE Emergency_Report SET status = 'In Progress' WHERE report_id = @report_id;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        SET @error_message = ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+
+
+-- SP 3: sp_FinancialEntry
+-- Steps: Insert transaction -> Audit log -> Update budget (if Expense)
+
+CREATE OR ALTER PROCEDURE sp_FinancialEntry
+    @made_by_user       INT           = NULL,
+    @made_by_donor      INT           = NULL,
+    @event_id           INT           = NULL,
+    @amount             DECIMAL(12,2),
+    @transaction_type   VARCHAR(20),
+    @performed_by       INT,
+    @transaction_id     INT           OUTPUT,
+    @error_message      VARCHAR(500)  OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @transaction_id = NULL;
+    SET @error_message  = NULL;
+
+    IF (@made_by_user IS NULL AND @made_by_donor IS NULL)
+       OR (@made_by_user IS NOT NULL AND @made_by_donor IS NOT NULL)
+    BEGIN
+        SET @error_message = 'Provide either @made_by_user OR @made_by_donor (not both).';
+        RETURN;
+    END
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        INSERT INTO Financial_Transaction
+            (made_by_user, made_by_donor, event_id, amount, transaction_type, status)
+        VALUES
+            (@made_by_user, @made_by_donor, @event_id, @amount, @transaction_type, 'Completed');
+
+        SET @transaction_id = SCOPE_IDENTITY();
+
+        DECLARE @new_value VARCHAR(MAX);
+        SET @new_value = @transaction_type + ' of ' + CAST(@amount AS VARCHAR(20))
+                         + ' | txn_id=' + CAST(@transaction_id AS VARCHAR(10));
+
+        INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+        VALUES (@performed_by, @transaction_id, 'INSERT', 'Financial_Transaction', NULL, @new_value);
+
+        IF @transaction_type = 'Expense' AND @event_id IS NOT NULL
+        BEGIN
+            UPDATE Budget SET total_spent = total_spent + @amount WHERE event_id = @event_id;
+        END
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        SET @error_message = ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+
+
