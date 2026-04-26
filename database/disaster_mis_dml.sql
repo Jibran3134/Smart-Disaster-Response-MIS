@@ -87,11 +87,23 @@ INSERT INTO Donor (donor_name, donor_type, contact_info) VALUES
 ('Edhi Foundation', 'NGO', '021-32211009'),
 ('USAID', 'International', 'usaid.pk@usaid.gov');
 
-INSERT INTO Financial_Transaction (made_by_user, made_by_donor, amount, transaction_date, transaction_type, status) VALUES
-(1, NULL, 2000000, '2024-07-16', 'Expense', 'Completed'),
-(NULL, 1, 5000000, '2024-07-17', 'Donation', 'Completed');
+INSERT INTO Financial_Transaction (made_by_user, made_by_donor, event_id, amount, transaction_date, transaction_type, status) VALUES
+(1, NULL, 1, 2000000, '2024-07-16', 'Expense', 'Completed'),
+(NULL, 1, 2, 5000000, '2024-07-17', 'Donation', 'Completed');
 
 INSERT INTO Budget (event_id, total_allocated, total_spent) VALUES
 (1, 20000000, 5000000),
 (2, 15000000, 7000000),
 (3, 10000000, 4000000);
+
+-- Insert missing Team Assignments for Response Time Analytics
+INSERT INTO Team_Assignment (team_id, report_id, assigned_at, completed_at) VALUES
+(1, 1, '2024-07-15 10:00:00', '2024-07-15 14:30:00'),
+(2, 5, '2024-11-20 08:00:00', '2024-11-20 09:15:00'),
+(3, 3, '2024-10-05 06:00:00', '2024-10-05 18:00:00');
+
+-- Insert missing Approval Requests for Approval Workflow History
+INSERT INTO Approval_Request (requested_by, approved_by, reference_id, request_type, status, remarks, request_time) VALUES
+(2, 1, 1, 'Resource Allocation', 'Approved', 'Urgent food packs needed', '2024-07-15'),
+(3, NULL, 2, 'Budget Increase', 'Pending', 'Need more funds for rescue', '2024-10-06'),
+(2, 1, 3, 'Team Deployment', 'Approved', 'Send Bravo team', '2024-11-20');
