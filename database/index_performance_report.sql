@@ -5,41 +5,67 @@ SET NOCOUNT ON;
 PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
 PRINT 'PHASE 1: QUERYING WITHOUT INDEXES (FULL TABLE SCAN)';
 PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
--- Drop index if exists 
-IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_team_type_status')
-    DROP INDEX idx_team_type_status ON Rescue_Team;
+-- Drop index if exists so we can test the "without index" performance
+IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_perf_disaster_type')
+    DROP INDEX idx_perf_disaster_type ON Disaster_Event;
 
--- Clears the procedure cache
-DBCC FREEPROCCACHE WITH NO_INFOMSGS
--- Clears the data cache
+-- Clears the procedure and data cache for a fair test
+DBCC FREEPROCCACHE WITH NO_INFOMSGS;
 DBCC DROPCLEANBUFFERS WITH NO_INFOMSGS;
--- Enables detailed tracking of CPU execution time milliseconds.
+-- Enables detailed tracking of CPU time and Logical Reads
 SET STATISTICS TIME ON;
--- Enables detailed tracking of physical disk reads and logical memory reads.
 SET STATISTICS IO ON;
--- Without an index, SQL Server must check EVERY single row 
-SELECT * FROM Rescue_Team WHERE team_type = 'Search & Rescue' AND availability_status = 'Available';
+
+-- We run the EXACT SAME query 10 times to make the data large enough to measure
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Flood';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Earthquake';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Fire';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Hurricane';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Tornado';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Flood';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Earthquake';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Fire';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Hurricane';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Tornado';
+
 SET STATISTICS IO OFF;
 SET STATISTICS TIME OFF;
 GO
 
 PRINT ' ';
 PRINT '=======================================================';
-PRINT 'PHASE 2: CREATING THE COMPOSITE INDEX';
+PRINT 'PHASE 2: CREATING THE INDEX';
 PRINT '=======================================================';
-PRINT 'Creating index introduces overhead on storage and writes, but optimizes reads...';
-EXEC('CREATE INDEX idx_team_type_status ON Rescue_Team(team_type, availability_status)');
+SET STATISTICS TIME ON;
+-- Create Index on disaster_type (as requested in assignment)
+CREATE INDEX idx_perf_disaster_type
+ON Disaster_Event (disaster_type);
+SET STATISTICS TIME OFF;
 GO
 
 PRINT ' ';
 PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
 PRINT 'PHASE 3: QUERYING WITH INDEXES (INDEX SEEK)';
 PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
+-- Clears the procedure and data cache for a fair test
 DBCC FREEPROCCACHE WITH NO_INFOMSGS;
 DBCC DROPCLEANBUFFERS WITH NO_INFOMSGS;
+
 SET STATISTICS TIME ON;
 SET STATISTICS IO ON;
-SELECT * FROM Rescue_Team WHERE team_type = 'Search & Rescue' AND availability_status = 'Available';
+
+-- We run the EXACT SAME 10 queries as we did in Phase 1
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Flood';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Earthquake';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Fire';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Hurricane';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Tornado';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Flood';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Earthquake';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Fire';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Hurricane';
+SELECT * FROM Disaster_Event WHERE disaster_type = 'Tornado';
+
 SET STATISTICS IO OFF;
 SET STATISTICS TIME OFF;
 GO
@@ -49,7 +75,8 @@ PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
 PRINT 'PHASE 4: DEMONSTRATING INDEX OVERHEAD ON INSERTS';
 PRINT '|||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
 SET STATISTICS TIME ON;
-INSERT INTO Rescue_Team (team_name, team_type, availability_status) VALUES ('Overhead Test Team', 'Medical', 'Available');
+INSERT INTO Disaster_Event (event_name, disaster_type, affected_areas, start_date, status) 
+VALUES ('Overhead Test Event', 'Other', 'Test Area', GETDATE(), 'Active');
 SET STATISTICS TIME OFF;
-DELETE FROM Rescue_Team WHERE team_name = 'Overhead Test Team';
+DELETE FROM Disaster_Event WHERE event_name = 'Overhead Test Event';
 GO
