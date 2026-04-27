@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,94 +7,70 @@ const COLORS = ['#3B82F6', '#EF4444', '#F59E0B', '#10B981', '#8B5CF6'];
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const [stats, setStats] = useState({
-    incidentsByType: [],
-    incidentsBySeverity: [],
-    resourceUtilization: [],
-    financialSummary: [],
-  });
   const [loading, setLoading] = useState(true);
-  const [summaryCards, setSummaryCards] = useState({
-    totalEmergencies: 0,
-    activeTeams: 0,
-    totalDonations: 0,
-    pendingApprovals: 0,
-  });
+  const [cards, setCards] = useState({ emergencies: 0, activeTeams: 0, donations: 0, pending: 0 });
+  const [incidentsByType, setIncidentsByType] = useState([]);
+  const [incidentsBySeverity, setIncidentsBySeverity] = useState([]);
+  const [resourceData, setResourceData] = useState([]);
+  const [financialData, setFinancialData] = useState([]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const fetchDashboardData = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      // Fetch all data in parallel
-      const [emergencies, teams, transactions, approvals, resources] = await Promise.all([
-        api.get('/emergencies'),
+      const [reportsRes, teamsRes, summaryRes, pendingRes, inventoryRes, eventsRes] = await Promise.all([
+        api.get('/emergencies/reports'),
         api.get('/teams'),
-        api.get('/finance'),
-        api.get('/approvals'),
-        api.get('/resources'),
+        api.get('/finance/summary'),
+        api.get('/approvals?status=Pending'),
+        api.get('/resources/inventory'),
+        api.get('/emergencies/events'),
       ]);
 
-      const emergencyData = emergencies.data || [];
-      const teamData = teams.data || [];
-      const transactionData = transactions.data || [];
-      const approvalData = approvals.data || [];
+      const reports = reportsRes.data || [];
+      const teams = teamsRes.data || [];
+      const summary = summaryRes.data || {};
+      const pending = pendingRes.data || [];
+      const inventory = inventoryRes.data || [];
 
-      // Summary cards
-      setSummaryCards({
-        totalEmergencies: emergencyData.length,
-        activeTeams: teamData.filter(t => t.availability_status === 'Assigned' || t.availability_status === 'Busy').length,
-        totalDonations: transactionData
-          .filter(t => t.transaction_type === 'Donation')
-          .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0),
-        pendingApprovals: approvalData.filter(a => a.status === 'Pending').length,
+      setCards({
+        emergencies: reports.length,
+        activeTeams: teams.filter(t => t.availability_status === 'Assigned' || t.availability_status === 'Busy').length,
+        donations: parseFloat(summary.total_donations || 0),
+        pending: pending.length,
       });
 
-      // Bar chart — incidents by disaster type
-      const typeCount = {};
-      emergencyData.forEach(e => {
-        typeCount[e.disaster_type] = (typeCount[e.disaster_type] || 0) + 1;
-      });
-      const incidentsByType = Object.entries(typeCount).map(([name, count]) => ({ name, count }));
+      // Incidents by type
+      const typeMap = {};
+      reports.forEach(r => { typeMap[r.disaster_type || 'Unknown'] = (typeMap[r.disaster_type || 'Unknown'] || 0) + 1; });
+      setIncidentsByType(Object.entries(typeMap).map(([name, count]) => ({ name, count })));
 
-      // Pie chart — incidents by severity
-      const sevCount = {};
-      emergencyData.forEach(e => {
-        sevCount[e.severity] = (sevCount[e.severity] || 0) + 1;
-      });
-      const incidentsBySeverity = Object.entries(sevCount).map(([name, value]) => ({ name, value }));
+      // Incidents by severity
+      const sevMap = {};
+      reports.forEach(r => { sevMap[r.severity || 'Unknown'] = (sevMap[r.severity || 'Unknown'] || 0) + 1; });
+      setIncidentsBySeverity(Object.entries(sevMap).map(([name, value]) => ({ name, value })));
 
-      // Line chart — resource utilization (group resources by type)
-      const resCount = {};
-      (resources.data || []).forEach(r => {
-        resCount[r.resource_type] = (resCount[r.resource_type] || 0) + r.quantity_available;
-      });
-      const resourceUtilization = Object.entries(resCount).map(([type, qty]) => ({ type, qty }));
+      // Resource by type
+      const resMap = {};
+      inventory.forEach(i => { resMap[i.resource_type] = (resMap[i.resource_type] || 0) + i.quantity_available; });
+      setResourceData(Object.entries(resMap).map(([type, qty]) => ({ type, qty })));
 
-      // Bar chart — financial summary by transaction type
-      const finCount = {};
-      transactionData.forEach(t => {
-        finCount[t.transaction_type] = (finCount[t.transaction_type] || 0) + parseFloat(t.amount || 0);
-      });
-      const financialSummary = Object.entries(finCount).map(([type, amount]) => ({ type, amount: Math.round(amount) }));
+      // Financial data
+      setFinancialData([
+        { type: 'Donations', amount: Math.round(parseFloat(summary.total_donations || 0)) },
+        { type: 'Expenses', amount: Math.round(parseFloat(summary.total_expenses || 0)) },
+        { type: 'Procurement', amount: Math.round(parseFloat(summary.total_procurement || 0)) },
+      ]);
 
-      setStats({ incidentsByType, incidentsBySeverity, resourceUtilization, financialSummary });
     } catch (err) {
-      console.error('Dashboard fetch error:', err);
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading dashboard...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Loading dashboard...</p></div>;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -109,7 +82,6 @@ const Dashboard = () => {
         </div>
       </nav>
 
-      {/* Navigation */}
       <div className="bg-white border-b border-gray-200 px-6 py-2 flex gap-6 flex-wrap text-sm">
         <a href="/emergencies" className="text-blue-600 hover:underline">Emergencies</a>
         <a href="/resources" className="text-blue-600 hover:underline">Resources</a>
@@ -122,38 +94,31 @@ const Dashboard = () => {
       </div>
 
       <div className="max-w-7xl mx-auto p-6">
-        {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-sm text-gray-500">Total Emergencies</p>
-            <p className="text-3xl font-bold text-blue-600">{summaryCards.totalEmergencies}</p>
+            <p className="text-3xl font-bold text-blue-600">{cards.emergencies}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-sm text-gray-500">Active Teams</p>
-            <p className="text-3xl font-bold text-purple-600">{summaryCards.activeTeams}</p>
+            <p className="text-3xl font-bold text-purple-600">{cards.activeTeams}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-sm text-gray-500">Total Donations</p>
-            <p className="text-3xl font-bold text-green-600">
-              PKR {Math.round(summaryCards.totalDonations).toLocaleString()}
-            </p>
+            <p className="text-2xl font-bold text-green-600">PKR {Math.round(cards.donations).toLocaleString()}</p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-sm text-gray-500">Pending Approvals</p>
-            <p className="text-3xl font-bold text-yellow-600">{summaryCards.pendingApprovals}</p>
+            <p className="text-3xl font-bold text-yellow-600">{cards.pending}</p>
           </div>
         </div>
 
-        {/* Charts Row 1 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Bar Chart — Incidents by Type */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-4">Incidents by Disaster Type</h2>
-            {stats.incidentsByType.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data available</p>
-            ) : (
+            <h2 className="text-base font-semibold text-gray-700 mb-4">Incidents by Type</h2>
+            {incidentsByType.length === 0 ? <p className="text-sm text-gray-400 text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.incidentsByType}>
+                <BarChart data={incidentsByType}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
@@ -164,26 +129,14 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Pie Chart — Incidents by Severity */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-base font-semibold text-gray-700 mb-4">Incidents by Severity</h2>
-            {stats.incidentsBySeverity.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data available</p>
-            ) : (
+            {incidentsBySeverity.length === 0 ? <p className="text-sm text-gray-400 text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
-                  <Pie
-                    data={stats.incidentsBySeverity}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
-                  >
-                    {stats.incidentsBySeverity.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
+                  <Pie data={incidentsBySeverity} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
+                    label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}>
+                    {incidentsBySeverity.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
                   <Legend />
@@ -193,16 +146,12 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Charts Row 2 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Bar Chart — Resource by Type */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-base font-semibold text-gray-700 mb-4">Resource Availability by Type</h2>
-            {stats.resourceUtilization.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data available</p>
-            ) : (
+            {resourceData.length === 0 ? <p className="text-sm text-gray-400 text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.resourceUtilization}>
+                <BarChart data={resourceData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="type" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 12 }} />
@@ -213,17 +162,14 @@ const Dashboard = () => {
             )}
           </div>
 
-          {/* Bar Chart — Financial Summary */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-4">Financial Summary by Category</h2>
-            {stats.financialSummary.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data available</p>
-            ) : (
+            <h2 className="text-base font-semibold text-gray-700 mb-4">Financial Summary</h2>
+            {financialData.every(d => d.amount === 0) ? <p className="text-sm text-gray-400 text-center py-8">No data</p> : (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={stats.financialSummary}>
+                <BarChart data={financialData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="type" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
+                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `${Math.round(v / 1000)}K`} />
                   <Tooltip formatter={(val) => `PKR ${val.toLocaleString()}`} />
                   <Bar dataKey="amount" fill="#F59E0B" name="Amount (PKR)" />
                 </BarChart>

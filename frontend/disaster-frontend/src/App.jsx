@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Emergencies from './pages/Emergencies';
 import Resources from './pages/Resources';
@@ -20,6 +21,7 @@ function App() {
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/register" element={<Register />} />
 
           {/* Protected routes — all logged-in users */}
           <Route
