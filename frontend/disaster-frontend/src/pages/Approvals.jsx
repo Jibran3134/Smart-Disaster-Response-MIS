@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
+import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 
 const Approvals = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [pending, setPending] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
+  const [msg, setMsg] = useState({ text: '', type: '' });
 
   const canApprove = ['Administrator', 'Emergency Operator', 'Finance Officer'].includes(user?.role);
 
@@ -16,102 +17,86 @@ const Approvals = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [allRes, histRes] = await Promise.all([
-        api.get('/approvals?status=Pending'),
-        api.get('/approvals/history'),
-      ]);
-      setPending(allRes.data);
+      const [pendRes, histRes] = await Promise.all([api.get('/approvals?status=Pending'), api.get('/approvals/history')]);
+      setPending(pendRes.data);
       setHistory(histRes.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   const handleApprove = async (id) => {
     try {
       await api.put(`/approvals/${id}/approve`);
-      setMessage('Request approved and executed successfully.');
+      setMsg({ text: 'Request approved and executed.', type: 'success' });
       fetchData();
     } catch (err) {
-      setMessage(err.response?.data?.details || err.response?.data?.error || 'Approval failed.');
+      setMsg({ text: err.response?.data?.details || err.response?.data?.error || 'Approval failed.', type: 'error' });
     }
   };
 
   const handleReject = async (id) => {
     try {
       await api.put(`/approvals/${id}/reject`);
-      setMessage('Request rejected.');
+      setMsg({ text: 'Request rejected.', type: 'info' });
       fetchData();
     } catch (err) {
-      setMessage(err.response?.data?.error || 'Rejection failed.');
+      setMsg({ text: err.response?.data?.error || 'Rejection failed.', type: 'error' });
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Approved': return 'bg-green-100 text-green-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const statusBadge = (s) => {
+    const map = { Pending: 'badge-pending', Approved: 'badge-approved', Rejected: 'badge-rejected' };
+    return <span className={`badge ${map[s] || ''}`}>{s}</span>;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-red-700 text-white px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">Approval Workflow</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm">{user?.full_name} ({user?.role})</span>
-          <button onClick={logout} className="bg-red-800 px-3 py-1 rounded text-sm">Logout</button>
-        </div>
-      </nav>
-
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex gap-4 mb-6 text-sm">
-          <a href="/dashboard" className="text-blue-600 underline">Dashboard</a>
-          <a href="/emergencies" className="text-blue-600 underline">Emergencies</a>
+    <>
+      <Navbar active="approvals" />
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">Approval Workflow</h1>
+          <span className="mono" style={{ color: '#7a7870' }}>{pending.length} pending</span>
         </div>
 
-        {message && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded text-sm">
-            {message}
+        {msg.text && <div className={`alert alert-${msg.type}`} style={{ marginBottom: 20 }}>{msg.text}</div>}
+
+        <div className="stat-grid" style={{ marginBottom: 24 }}>
+          <div className="stat-card"><div className="label">Pending</div><div className="value yellow">{pending.length}</div></div>
+          <div className="stat-card"><div className="label">Total History</div><div className="value">{history.length}</div></div>
+          <div className="stat-card"><div className="label">Approved</div><div className="value green">{history.filter(h => h.status === 'Approved').length}</div></div>
+          <div className="stat-card"><div className="label">Rejected</div><div className="value red">{history.filter(h => h.status === 'Rejected').length}</div></div>
+        </div>
+
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <span className="card-title">Pending requests</span>
+            <span className="mono">{pending.length} awaiting action</span>
           </div>
-        )}
-
-        <div className="bg-white rounded-lg shadow mb-6">
-          <h2 className="text-lg font-semibold p-4 border-b border-gray-200">Pending Requests ({pending.length})</h2>
           {loading ? (
-            <p className="text-center py-8 text-gray-500">Loading...</p>
+            <div className="empty" style={{ padding: '32px 0' }}>loading...</div>
           ) : pending.length === 0 ? (
-            <p className="text-center py-8 text-gray-500">No pending requests.</p>
+            <div className="empty" style={{ padding: '32px 0' }}>no pending requests</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+            <div className="table-wrap">
+              <table>
+                <thead>
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Requested By</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Time</th>
-                    {canApprove && <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>}
+                    <th>#ID</th><th>Type</th><th>Requested by</th><th>Timestamp</th>
+                    {canApprove && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {pending.map((r) => (
-                    <tr key={r.request_id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3">{r.request_id}</td>
-                      <td className="px-4 py-3">{r.request_type}</td>
-                      <td className="px-4 py-3">{r.requested_by_name}</td>
-                      <td className="px-4 py-3">{new Date(r.request_time).toLocaleString()}</td>
+                  {pending.map(r => (
+                    <tr key={r.request_id}>
+                      <td className="mono">{String(r.request_id).padStart(4, '0')}</td>
+                      <td style={{ fontWeight: 500 }}>{r.request_type}</td>
+                      <td>{r.requested_by_name}</td>
+                      <td className="mono">{new Date(r.request_time).toLocaleString()}</td>
                       {canApprove && (
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleApprove(r.request_id)}
-                              className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700">Approve</button>
-                            <button onClick={() => handleReject(r.request_id)}
-                              className="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700">Reject</button>
+                        <td>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-success btn-sm" onClick={() => handleApprove(r.request_id)}>Approve</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleReject(r.request_id)}>Reject</button>
                           </div>
                         </td>
                       )}
@@ -123,43 +108,35 @@ const Approvals = () => {
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow">
-          <h2 className="text-lg font-semibold p-4 border-b border-gray-200">Approval History</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Requested By</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Reviewed By</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Time</th>
-                </tr>
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Approval history</span>
+            <span className="mono">{history.length} records</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#ID</th><th>Type</th><th>Requested by</th><th>Reviewed by</th><th>Status</th><th>Timestamp</th></tr>
               </thead>
               <tbody>
                 {history.length === 0 ? (
-                  <tr><td colSpan="6" className="text-center py-8 text-gray-500">No history yet.</td></tr>
-                ) : (
-                  history.map((r) => (
-                    <tr key={r.request_id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3">{r.request_id}</td>
-                      <td className="px-4 py-3">{r.request_type}</td>
-                      <td className="px-4 py-3">{r.requested_by_name}</td>
-                      <td className="px-4 py-3">{r.reviewed_by_name || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(r.status)}`}>{r.status}</span>
-                      </td>
-                      <td className="px-4 py-3">{new Date(r.request_time).toLocaleString()}</td>
-                    </tr>
-                  ))
-                )}
+                  <tr><td colSpan="6"><div className="empty">no history</div></td></tr>
+                ) : history.map(r => (
+                  <tr key={r.request_id}>
+                    <td className="mono">{String(r.request_id).padStart(4, '0')}</td>
+                    <td style={{ fontWeight: 500 }}>{r.request_type}</td>
+                    <td>{r.requested_by_name}</td>
+                    <td>{r.reviewed_by_name || '—'}</td>
+                    <td>{statusBadge(r.status)}</td>
+                    <td className="mono">{new Date(r.request_time).toLocaleString()}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

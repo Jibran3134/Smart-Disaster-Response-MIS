@@ -3,145 +3,92 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
 const Register = () => {
-  const [form, setForm] = useState({
-    full_name: '',
-    email: '',
-    password: '',
-    role_name: '',
-  });
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', role_name: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError(''); setSuccess('');
     setLoading(true);
-
-    if (!form.full_name || !form.email || !form.password || !form.role_name) {
-      setError('All fields are required.');
-      setLoading(false);
-      return;
-    }
-
     try {
       await api.post('/auth/register', form);
-      setSuccess('Account created successfully! Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000);
+      setSuccess('Account created. Redirecting...');
+      setTimeout(() => navigate('/login'), 1800);
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Try again.');
+      setError(err.response?.data?.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Disaster Response MIS</h1>
-          <p className="text-gray-500 mt-1">Create a new account</p>
+    <div style={{
+      minHeight: '100vh', background: '#0a0a0f',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: "'Rajdhani', sans-serif",
+    }}>
+      <div style={{ width: '100%', maxWidth: 420, padding: '0 24px' }}>
+        <div style={{ marginBottom: 40, textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 10, height: 10, background: '#e8460a', borderRadius: '50%' }} />
+            <span style={{ fontSize: 20, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#e8e6e0' }}>
+              Disaster Response MIS
+            </span>
+          </div>
+          <p style={{ fontSize: 12, color: '#4a4845', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
+            NEW ACCOUNT REGISTRATION
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name
-            </label>
-            <input
-              type="text"
-              name="full_name"
-              value={form.full_name}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="John Doe"
-              required
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Role
-            </label>
-            <select
-              name="role_name"
-              value={form.role_name}
-              onChange={handleChange}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            >
-              <option value="">Select Role</option>
-              <option value="Administrator">Administrator</option>
-              <option value="Emergency Operator">Emergency Operator</option>
-              <option value="Field Officer">Field Officer</option>
-              <option value="Warehouse Manager">Warehouse Manager</option>
-              <option value="Finance Officer">Finance Officer</option>
-            </select>
-          </div>
-
-          {error && (
-            <div className="mb-4 bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded">
-              {error}
+        <div style={{ background: '#111118', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid #e8460a', borderRadius: 4, padding: 32 }}>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Full name</label>
+              <input type="text" value={form.full_name}
+                onChange={e => setForm({ ...form, full_name: e.target.value })}
+                placeholder="John Doe" required />
             </div>
-          )}
-
-          {success && (
-            <div className="mb-4 bg-green-50 border border-green-300 text-green-700 px-4 py-3 rounded">
-              {success}
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Email address</label>
+              <input type="email" value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="you@agency.gov" required />
             </div>
-          )}
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Password</label>
+              <input type="password" value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="••••••••" required />
+            </div>
+            <div className="form-group" style={{ marginBottom: 24 }}>
+              <label>Role</label>
+              <select value={form.role_name}
+                onChange={e => setForm({ ...form, role_name: e.target.value })} required>
+                <option value="">Select role</option>
+                <option value="Administrator">Administrator</option>
+                <option value="Emergency Operator">Emergency Operator</option>
+                <option value="Field Officer">Field Officer</option>
+                <option value="Warehouse Manager">Warehouse Manager</option>
+                <option value="Finance Officer">Finance Officer</option>
+              </select>
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
-            {loading ? 'Creating Account...' : 'Register'}
-          </button>
+            {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+            {success && <div className="alert alert-success" style={{ marginBottom: 16 }}>{success}</div>}
 
-          <p className="text-center text-sm text-gray-500 mt-4">
-            Already have an account?{' '}
-            <a href="/login" className="text-blue-600 underline">
-              Sign in
-            </a>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
+              {loading ? 'Creating account...' : 'Create account'}
+            </button>
+          </form>
+
+          <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#4a4845', fontFamily: "'JetBrains Mono', monospace" }}>
+            Have an account?{' '}
+            <a href="/login" style={{ color: '#e8460a', textDecoration: 'underline', textUnderlineOffset: 3 }}>Sign in</a>
           </p>
-        </form>
+        </div>
       </div>
     </div>
   );
