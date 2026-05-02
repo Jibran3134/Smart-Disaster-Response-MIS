@@ -4,19 +4,24 @@ import Navbar from '../components/Navbar';
 
 const Hospitals = () => {
   const [hospitals, setHospitals] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedHospital, setSelectedHospital] = useState('');
   const [form, setForm] = useState({ patient_name: '', dob: '', condition: '', report_id: '' });
   const [msg, setMsg] = useState({ text: '', type: '' });
 
-  useEffect(() => { fetchHospitals(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const fetchHospitals = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/hospitals');
-      setHospitals(res.data);
+      const [hRes, repRes] = await Promise.all([
+        api.get('/hospitals'),
+        api.get('/emergencies/reports'),
+      ]);
+      setHospitals(hRes.data);
+      setReports(repRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -28,16 +33,21 @@ const Hospitals = () => {
       setMsg({ text: 'Hospital and patient name are required.', type: 'error' }); return;
     }
     try {
-      await api.post(`/hospitals/${selectedHospital}/patients`, form);
+      await api.post(`/hospitals/${selectedHospital}/patients`, {
+        ...form,
+        report_id: form.report_id ? parseInt(form.report_id) : null,
+      });
       setMsg({ text: 'Patient admitted successfully.', type: 'success' });
       setForm({ patient_name: '', dob: '', condition: '', report_id: '' });
+      setSelectedHospital('');
       setShowForm(false);
-      fetchHospitals();
+      await fetchData(); // re-fetch so stats update immediately
     } catch (err) {
       setMsg({ text: err.response?.data?.error || 'Admission failed.', type: 'error' });
     }
   };
 
+  // Compute stats from live data
   const totalBeds = hospitals.reduce((s, h) => s + (h.total_beds || 0), 0);
   const availBeds = hospitals.reduce((s, h) => s + (h.available_beds || 0), 0);
 
@@ -70,24 +80,39 @@ const Hospitals = () => {
                     <label>Hospital *</label>
                     <select value={selectedHospital} onChange={e => setSelectedHospital(e.target.value)} required>
                       <option value="">Select hospital</option>
-                      {hospitals.map(h => <option key={h.hospital_id} value={h.hospital_id}>{h.hospital_name}</option>)}
+                      {hospitals.map(h => (
+                        <option key={h.hospital_id} value={h.hospital_id}>
+                          {h.hospital_name} — {h.available_beds} beds available
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="form-group">
                     <label>Patient name *</label>
-                    <input type="text" value={form.patient_name} onChange={e => setForm({ ...form, patient_name: e.target.value })} required />
+                    <input type="text" value={form.patient_name}
+                      onChange={e => setForm({ ...form, patient_name: e.target.value })} required />
                   </div>
                   <div className="form-group">
                     <label>Date of birth</label>
-                    <input type="date" value={form.dob} onChange={e => setForm({ ...form, dob: e.target.value })} />
+                    <input type="date" value={form.dob}
+                      onChange={e => setForm({ ...form, dob: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label>Condition</label>
-                    <input type="text" value={form.condition} onChange={e => setForm({ ...form, condition: e.target.value })} placeholder="e.g. Critical" />
+                    <input type="text" value={form.condition}
+                      onChange={e => setForm({ ...form, condition: e.target.value })}
+                      placeholder="e.g. Critical" />
                   </div>
                   <div className="form-group">
-                    <label>Report ID</label>
-                    <input type="number" value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} />
+                    <label>Linked Emergency Report</label>
+                    <select value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })}>
+                      <option value="">None</option>
+                      {reports.map(r => (
+                        <option key={r.report_id} value={r.report_id}>
+                          #{r.report_id} — {r.area_name} ({r.severity})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <button type="submit" className="btn btn-primary">Admit Patient</button>
@@ -101,7 +126,8 @@ const Hospitals = () => {
         ) : (
           <div className="hospital-grid">
             {hospitals.map(h => {
-              const occupancy = h.total_beds > 0 ? Math.round(((h.total_beds - h.available_beds) / h.total_beds) * 100) : 0;
+              const occupancy = h.total_beds > 0
+                ? Math.round(((h.total_beds - h.available_beds) / h.total_beds) * 100) : 0;
               const fillClass = occupancy >= 90 ? 'critical' : occupancy >= 70 ? 'warning' : '';
               return (
                 <div key={h.hospital_id} className="hospital-card">

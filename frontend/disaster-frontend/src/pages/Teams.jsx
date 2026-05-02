@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 const Teams = () => {
   const [teams, setTeams] = useState([]);
   const [assignments, setAssignments] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ team_id: '', report_id: '' });
@@ -15,9 +16,14 @@ const Teams = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [tRes, aRes] = await Promise.all([api.get('/teams'), api.get('/teams/assignments')]);
+      const [tRes, aRes, repRes] = await Promise.all([
+        api.get('/teams'),
+        api.get('/teams/assignments'),
+        api.get('/emergencies/reports'),
+      ]);
       setTeams(tRes.data);
       setAssignments(aRes.data);
+      setReports(repRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -72,12 +78,26 @@ const Teams = () => {
               <form onSubmit={handleSubmit}>
                 <div className="form-grid" style={{ marginBottom: 16 }}>
                   <div className="form-group">
-                    <label>Team ID *</label>
-                    <input type="number" value={form.team_id} onChange={e => setForm({ ...form, team_id: e.target.value })} placeholder="e.g. 1" />
+                    <label>Team *</label>
+                    <select value={form.team_id} onChange={e => setForm({ ...form, team_id: e.target.value })} required>
+                      <option value="">Select team</option>
+                      {teams.map(t => (
+                        <option key={t.team_id} value={t.team_id}>
+                          #{t.team_id} — {t.team_name} ({t.team_type}) · {t.availability_status}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label>Report ID *</label>
-                    <input type="number" value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} placeholder="e.g. 2" />
+                    <label>Emergency Report *</label>
+                    <select value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} required>
+                      <option value="">Select report</option>
+                      {reports.map(r => (
+                        <option key={r.report_id} value={r.report_id}>
+                          #{r.report_id} — {r.area_name} ({r.severity})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <button type="submit" className="btn btn-primary">Submit Request</button>

@@ -5,6 +5,9 @@ import Navbar from '../components/Navbar';
 const Resources = () => {
   const [inventory, setInventory] = useState([]);
   const [lowStock, setLowStock] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ report_id: '', warehouse_id: '', resource_id: '', quantity: '' });
@@ -15,9 +18,18 @@ const Resources = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [invRes, lowRes] = await Promise.all([api.get('/resources/inventory'), api.get('/resources/inventory/low-stock')]);
+      const [invRes, lowRes, whRes, rRes, repRes] = await Promise.all([
+        api.get('/resources/inventory'),
+        api.get('/resources/inventory/low-stock'),
+        api.get('/resources/warehouses'),
+        api.get('/resources/'),
+        api.get('/emergencies/reports'),
+      ]);
       setInventory(invRes.data);
       setLowStock(lowRes.data);
+      setWarehouses(whRes.data);
+      setResources(rRes.data);
+      setReports(repRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -58,18 +70,9 @@ const Resources = () => {
         </div>
 
         <div className="stat-grid">
-          <div className="stat-card">
-            <div className="label">Total Items</div>
-            <div className="value">{inventory.length}</div>
-          </div>
-          <div className="stat-card">
-            <div className="label">Low Stock Alerts</div>
-            <div className="value yellow">{lowStock.length}</div>
-          </div>
-          <div className="stat-card">
-            <div className="label">Out of Stock</div>
-            <div className="value red">{inventory.filter(i => i.quantity_available <= 0).length}</div>
-          </div>
+          <div className="stat-card"><div className="label">Total Items</div><div className="value">{inventory.length}</div></div>
+          <div className="stat-card"><div className="label">Low Stock Alerts</div><div className="value yellow">{lowStock.length}</div></div>
+          <div className="stat-card"><div className="label">Out of Stock</div><div className="value red">{inventory.filter(i => i.quantity_available <= 0).length}</div></div>
         </div>
 
         {showForm && (
@@ -80,20 +83,43 @@ const Resources = () => {
               <form onSubmit={handleSubmit}>
                 <div className="form-grid" style={{ marginBottom: 16 }}>
                   <div className="form-group">
-                    <label>Report ID *</label>
-                    <input type="number" value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} placeholder="e.g. 1" />
+                    <label>Emergency Report *</label>
+                    <select value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} required>
+                      <option value="">Select report</option>
+                      {reports.map(r => (
+                        <option key={r.report_id} value={r.report_id}>
+                          #{r.report_id} — {r.area_name} ({r.severity})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label>Warehouse ID *</label>
-                    <input type="number" value={form.warehouse_id} onChange={e => setForm({ ...form, warehouse_id: e.target.value })} placeholder="e.g. 1" />
+                    <label>Warehouse *</label>
+                    <select value={form.warehouse_id} onChange={e => setForm({ ...form, warehouse_id: e.target.value })} required>
+                      <option value="">Select warehouse</option>
+                      {warehouses.map(w => (
+                        <option key={w.warehouse_id} value={w.warehouse_id}>
+                          #{w.warehouse_id} — {w.warehouse_name} ({w.city})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label>Resource ID *</label>
-                    <input type="number" value={form.resource_id} onChange={e => setForm({ ...form, resource_id: e.target.value })} placeholder="e.g. 2" />
+                    <label>Resource *</label>
+                    <select value={form.resource_id} onChange={e => setForm({ ...form, resource_id: e.target.value })} required>
+                      <option value="">Select resource</option>
+                      {resources.map(r => (
+                        <option key={r.resource_id} value={r.resource_id}>
+                          #{r.resource_id} — {r.resource_name} ({r.resource_type})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Quantity *</label>
-                    <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="e.g. 50" />
+                    <input type="number" min="1" value={form.quantity}
+                      onChange={e => setForm({ ...form, quantity: e.target.value })}
+                      placeholder="e.g. 50" required />
                   </div>
                 </div>
                 <button type="submit" className="btn btn-primary">Submit Request</button>

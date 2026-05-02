@@ -8,6 +8,7 @@ const Finance = () => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({});
   const [budgets, setBudgets] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -21,10 +22,16 @@ const Finance = () => {
     try {
       let url = '/finance/transactions';
       if (filterType) url += `?type=${filterType}`;
-      const [txRes, sumRes, budgetRes] = await Promise.all([api.get(url), api.get('/finance/summary'), api.get('/finance/budgets')]);
+      const [txRes, sumRes, budgetRes, evRes] = await Promise.all([
+        api.get(url),
+        api.get('/finance/summary'),
+        api.get('/finance/budgets'),
+        api.get('/emergencies/events'),
+      ]);
       setTransactions(txRes.data);
       setSummary(sumRes.data);
       setBudgets(budgetRes.data);
+      setEvents(evRes.data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -43,7 +50,7 @@ const Finance = () => {
       setMsg({ text: 'Financial request submitted for approval.', type: 'success' });
       setForm({ amount: '', transaction_type: '', event_id: '' });
       setShowForm(false);
-      fetchData();
+      await fetchData(); // refresh everything immediately
     } catch (err) {
       setMsg({ text: err.response?.data?.error || 'Request failed.', type: 'error' });
     }
@@ -93,18 +100,28 @@ const Finance = () => {
                 <div className="form-grid" style={{ marginBottom: 16 }}>
                   <div className="form-group">
                     <label>Amount (PKR) *</label>
-                    <input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="e.g. 50000" required />
+                    <input type="number" step="0.01" value={form.amount}
+                      onChange={e => setForm({ ...form, amount: e.target.value })}
+                      placeholder="e.g. 50000" required />
                   </div>
                   <div className="form-group">
                     <label>Type *</label>
-                    <select value={form.transaction_type} onChange={e => setForm({ ...form, transaction_type: e.target.value })} required>
+                    <select value={form.transaction_type}
+                      onChange={e => setForm({ ...form, transaction_type: e.target.value })} required>
                       <option value="">Select</option>
                       <option>Donation</option><option>Expense</option><option>Procurement</option>
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Event ID</label>
-                    <input type="number" value={form.event_id} onChange={e => setForm({ ...form, event_id: e.target.value })} placeholder="optional" />
+                    <label>Disaster Event</label>
+                    <select value={form.event_id} onChange={e => setForm({ ...form, event_id: e.target.value })}>
+                      <option value="">None</option>
+                      {events.map(ev => (
+                        <option key={ev.event_id} value={ev.event_id}>
+                          #{ev.event_id} — {ev.event_name} ({ev.disaster_type})
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <button type="submit" className="btn btn-primary">Submit for Approval</button>
