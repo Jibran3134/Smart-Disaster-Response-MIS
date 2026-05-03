@@ -1,4 +1,4 @@
-// [PROJECT] ACID Transactions — these endpoints call SQL Server stored procedures
+// ACID Transactions — these endpoints call SQL Server stored procedures
 // that handle BEGIN TRAN / COMMIT / ROLLBACK internally.
 // Express no longer manages transactions; the DB enforces atomicity.
 

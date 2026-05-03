@@ -133,7 +133,22 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
-    const token = generateJwt(user);
+    // If Warehouse Manager, fetch their assigned warehouse
+    let warehouseInfo = null;
+    if (user.role_name === 'Warehouse Manager') {
+      const whResult = await pool.request()
+        .input('user_id', sql.Int, user.user_id)
+        .query(`
+          SELECT warehouse_id, warehouse_name, capacity, street, city
+          FROM Warehouse
+          WHERE managed_by = @user_id
+        `);
+      if (whResult.recordset.length > 0) {
+        warehouseInfo = whResult.recordset[0];
+      }
+    }
+
+    const token = generateJwt(user, warehouseInfo);
 
     return res.json({
       message: 'Login successful.',
@@ -143,7 +158,8 @@ router.post('/login', async (req, res) => {
         full_name: user.full_name,
         email:     user.email,
         role:      user.role_name,     
-        phone:     user.phone_number
+        phone:     user.phone_number,
+        warehouse: warehouseInfo
       }
     });
 
@@ -258,7 +274,7 @@ router.delete('/users/:id', requireRoles('Administrator'), async (req, res) => {
 });
 
 
-function generateJwt(user) {
+function generateJwt(user, warehouseInfo) {
   
   const payload = {
     userId:   user.user_id.toString(),
@@ -266,6 +282,11 @@ function generateJwt(user) {
     role:     user.role_name,   
     fullName: user.full_name,
   };
+
+  // Include warehouse_id for Warehouse Managers
+  if (warehouseInfo && warehouseInfo.warehouse_id) {
+    payload.warehouseId = warehouseInfo.warehouse_id;
+  }
 
   const expiryMinutes = parseInt(process.env.JWT_EXPIRY_MINUTES || '480', 10);
 

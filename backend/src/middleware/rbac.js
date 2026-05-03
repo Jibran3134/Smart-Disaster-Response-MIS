@@ -20,11 +20,11 @@ const ROLE_POLICY = {
   // Hospitals — operators coordinate with hospitals
   '/api/hospitals':    ['Administrator', 'Emergency Operator'],
 
-  // Finance — only finance officers and admins
-  '/api/finance':      ['Administrator', 'Finance Officer'],
+  // Finance — finance officers, admins, and warehouse managers (for procurement)
+  '/api/finance':      ['Administrator', 'Finance Officer', 'Warehouse Manager'],
 
-  // Approvals — admins, operators (emergency approvals), finance (budget approvals)
-  '/api/approvals':    ['Administrator', 'Emergency Operator', 'Finance Officer'],
+  // Approvals — admins, operators, finance (can approve), and warehouse managers, field officers (can request)
+  '/api/approvals':    ['Administrator', 'Emergency Operator', 'Finance Officer', 'Warehouse Manager', 'Field Officer'],
 
   // Transactions — all roles can view, but mostly finance and warehouse
   '/api/transactions': ['Administrator', 'Emergency Operator', 'Field Officer', 'Warehouse Manager', 'Finance Officer'],
@@ -52,6 +52,22 @@ function rbacMiddleware(req, res, next) {
   // Administrator can access EVERYTHING 
   if (role === 'Administrator') {
     return next();
+  }
+
+  // Dashboard analytics should be shown for every user
+  if (req.method === 'GET') {
+    const path = req.originalUrl.split('?')[0].toLowerCase();
+    const dashboardPaths = [
+      '/api/emergencies/reports',
+      '/api/emergencies/events',
+      '/api/teams',
+      '/api/finance/summary',
+      '/api/approvals',
+      '/api/resources/inventory'
+    ];
+    if (dashboardPaths.includes(path)) {
+      return next();
+    }
   }
 
   for (const [prefix, allowedRoles] of Object.entries(ROLE_POLICY)) {

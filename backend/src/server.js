@@ -18,6 +18,7 @@ const hospitalsRoutes    = require('./routes/hospitals');
 const financeRoutes      = require('./routes/finance');
 const approvalsRoutes    = require('./routes/approvals');
 const transactionsRoutes = require('./routes/transactions');
+const auditRoutes        = require('./routes/audit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -52,6 +53,7 @@ app.use('/api/hospitals',    hospitalsRoutes);
 app.use('/api/finance',      financeRoutes);
 app.use('/api/approvals',    approvalsRoutes);
 app.use('/api/transactions', transactionsRoutes);
+app.use('/api/audit',        auditRoutes);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

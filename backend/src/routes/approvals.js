@@ -130,9 +130,23 @@ router.post('/request-allocation', async (req, res) => {
         VALUES (@requested_by, @request_type, @remarks);
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
+      
+    const request_id = result.recordset[0].request_id;
+
+    await pool.request()
+      .input('log_user_id', sql.Int, requested_by)
+      .input('log_record_id', sql.Int, request_id)
+      .input('log_action_type', sql.VarChar(50), 'REQUEST_ALLOCATION')
+      .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+      .input('log_new_value', sql.VarChar(sql.MAX), `Requested ${quantity} of resource ${resource_id} for report ${report_id}`)
+      .query(`
+        INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+        VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
+      `);
+
     return res.status(201).json({
       message: 'Resource distribution request submitted for approval.',
-      request_id: result.recordset[0].request_id,
+      request_id: request_id,
       status: 'Pending'
     });
   } catch (err) {
@@ -161,9 +175,23 @@ router.post('/request-deployment', async (req, res) => {
         VALUES (@requested_by, @request_type, @remarks);
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
+
+    const request_id = result.recordset[0].request_id;
+
+    await pool.request()
+      .input('log_user_id', sql.Int, requested_by)
+      .input('log_record_id', sql.Int, request_id)
+      .input('log_action_type', sql.VarChar(50), 'REQUEST_DEPLOYMENT')
+      .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+      .input('log_new_value', sql.VarChar(sql.MAX), `Requested deployment of team ${team_id} for report ${report_id}`)
+      .query(`
+        INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+        VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
+      `);
+
     return res.status(201).json({
       message: 'Rescue deployment request submitted for approval.',
-      request_id: result.recordset[0].request_id,
+      request_id: request_id,
       status: 'Pending'
     });
   } catch (err) {
@@ -176,7 +204,7 @@ router.post('/request-deployment', async (req, res) => {
 // POST /api/approvals/request-financial
 router.post('/request-financial', async (req, res) => {
   try {
-    const { made_by_user, made_by_donor, event_id, amount, transaction_type } = req.body;
+    const { made_by_user, made_by_donor, event_id, amount, transaction_type, warehouse_id, resource_id, quantity } = req.body;
     if (!amount || !transaction_type) {
       return res.status(400).json({ error: 'amount and transaction_type are required.' });
     }
@@ -189,7 +217,10 @@ router.post('/request-financial', async (req, res) => {
       made_by_donor: made_by_donor || null,
       event_id: event_id || null,
       amount, transaction_type,
-      performed_by: requested_by
+      performed_by: requested_by,
+      warehouse_id: warehouse_id || null,
+      resource_id: resource_id || null,
+      quantity: quantity || null
     });
     const pool = getPool();
     const result = await pool.request()
@@ -201,9 +232,23 @@ router.post('/request-financial', async (req, res) => {
         VALUES (@requested_by, @request_type, @remarks);
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
+      
+    const request_id = result.recordset[0].request_id;
+
+    await pool.request()
+      .input('log_user_id', sql.Int, requested_by)
+      .input('log_record_id', sql.Int, request_id)
+      .input('log_action_type', sql.VarChar(50), 'REQUEST_FINANCIAL')
+      .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+      .input('log_new_value', sql.VarChar(sql.MAX), `Requested financial transaction: ${transaction_type} of ${amount}`)
+      .query(`
+        INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+        VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
+      `);
+
     return res.status(201).json({
       message: 'Financial approval request submitted.',
-      request_id: result.recordset[0].request_id,
+      request_id: request_id,
       status: 'Pending'
     });
   } catch (err) {
@@ -232,9 +277,23 @@ router.post('/', async (req, res) => {
         VALUES (@requested_by, @request_type, @reference_id, @remarks);
         SELECT CAST(SCOPE_IDENTITY() AS INT) AS request_id;
       `);
+      
+    const request_id = result.recordset[0].request_id;
+
+    await pool.request()
+      .input('log_user_id', sql.Int, requested_by)
+      .input('log_record_id', sql.Int, request_id)
+      .input('log_action_type', sql.VarChar(50), 'REQUEST_GENERIC')
+      .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+      .input('log_new_value', sql.VarChar(sql.MAX), `Requested: ${request_type}`)
+      .query(`
+        INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+        VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
+      `);
+
     return res.status(201).json({
       message: 'Approval request created.',
-      request_id: result.recordset[0].request_id,
+      request_id: request_id,
       status: 'Pending'
     });
   } catch (err) {
@@ -349,6 +408,21 @@ router.put('/:id/approve',
             WHERE warehouse_id = @warehouse_id AND resource_id = @resource_id;
           `);
 
+        // Audit log
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, approved_by)
+          .input('record_id', sql.Int, allocation_id)
+          .input('action_type', sql.VarChar(50), 'ALLOCATE')
+          .input('table_name', sql.VarChar(50), 'Allocation')
+          .input('new_value', sql.VarChar(sql.MAX),
+            `Allocated ${quantity} of resource ${resource_id} from warehouse ${warehouse_id}`)
+          .query(`
+            INSERT INTO Audit_Log
+              (user_id, record_id, action_type, table_name, old_value, new_value)
+            VALUES
+              (@user_id, @record_id, @action_type, @table_name, NULL, @new_value);
+          `);
+
         executionResult = { allocation_id, quantity_deducted: quantity };
 
       } else if (request.request_type === 'Rescue Deployment') {
@@ -383,11 +457,26 @@ router.put('/:id/approve',
           .input('report_id', sql.Int, report_id)
           .query("UPDATE Emergency_Report SET status = 'In Progress' WHERE report_id = @report_id");
 
+        // Audit log
+        await new sql.Request(transaction)
+          .input('user_id', sql.Int, approved_by)
+          .input('record_id', sql.Int, team_id)
+          .input('action_type', sql.VarChar(50), 'ASSIGN_TEAM')
+          .input('table_name', sql.VarChar(50), 'Team_Assignment')
+          .input('new_value', sql.VarChar(sql.MAX),
+            `Assigned team ${team_id} to report ${report_id}`)
+          .query(`
+            INSERT INTO Audit_Log
+              (user_id, record_id, action_type, table_name, old_value, new_value)
+            VALUES
+              (@user_id, @record_id, @action_type, @table_name, NULL, @new_value);
+          `);
+
         executionResult = { team_id, report_id, team_status: 'Assigned' };
 
       } else if (request.request_type === 'Financial Approval') {
         // Execute financial transaction
-        const { made_by_user, made_by_donor, event_id, amount, transaction_type, performed_by } = payload;
+        const { made_by_user, made_by_donor, event_id, amount, transaction_type, performed_by, warehouse_id, resource_id, quantity } = payload;
 
         const ftResult = await new sql.Request(transaction)
           .input('made_by_user', sql.Int, made_by_user || null)
@@ -428,9 +517,66 @@ router.put('/:id/approve',
             .query('UPDATE Budget SET total_spent = total_spent + @amount WHERE event_id = @event_id');
         }
 
+        // Handle Procurement specific logic (add to inventory)
+        if (transaction_type === 'Procurement' && warehouse_id && resource_id && quantity) {
+          // 1. Create Procurement record
+          const procResult = await new sql.Request(transaction)
+            .input('procured_by', sql.Int, performed_by || approved_by)
+            .input('warehouse_id', sql.Int, warehouse_id)
+            .input('transaction_id', sql.Int, transaction_id)
+            .query(`
+              INSERT INTO Procurement (procured_by, warehouse_id, transaction_id, procurement_date)
+              VALUES (@procured_by, @warehouse_id, @transaction_id, GETDATE());
+              SELECT CAST(SCOPE_IDENTITY() AS INT) AS procurement_id;
+            `);
+          
+          const procurement_id = procResult.recordset[0].procurement_id;
+
+          // 2. Create Procurement Items
+          await new sql.Request(transaction)
+            .input('procurement_id', sql.Int, procurement_id)
+            .input('resource_id', sql.Int, resource_id)
+            .input('quantity', sql.Int, quantity)
+            .query(`
+              INSERT INTO Procurement_Items (procurement_id, resource_id, quantity)
+              VALUES (@procurement_id, @resource_id, @quantity);
+            `);
+
+          // 3. Update Inventory (Upsert logic to increase stock)
+          await new sql.Request(transaction)
+            .input('warehouse_id', sql.Int, warehouse_id)
+            .input('resource_id', sql.Int, resource_id)
+            .input('quantity', sql.Int, quantity)
+            .query(`
+              IF EXISTS (SELECT 1 FROM Inventory WHERE warehouse_id = @warehouse_id AND resource_id = @resource_id)
+              BEGIN
+                  UPDATE Inventory
+                  SET quantity_available = quantity_available + @quantity
+                  WHERE warehouse_id = @warehouse_id AND resource_id = @resource_id;
+              END
+              ELSE
+              BEGIN
+                  INSERT INTO Inventory (warehouse_id, resource_id, quantity_available, threshold_level)
+                  VALUES (@warehouse_id, @resource_id, @quantity, 10);
+              END
+            `);
+        }
+
         executionResult = { transaction_id, transaction_type, amount };
       }
       // For generic/unknown request types, just approve without execution
+
+      // Audit log the approval action itself
+      await new sql.Request(transaction)
+        .input('log_user_id', sql.Int, approved_by)
+        .input('log_record_id', sql.Int, req.params.id)
+        .input('log_action_type', sql.VarChar(50), 'APPROVE')
+        .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+        .input('log_new_value', sql.VarChar(sql.MAX), `Approved request ${req.params.id} (${request.request_type})`)
+        .query(`
+          INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+          VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
+        `);
 
       await transaction.commit();
 
@@ -498,6 +644,18 @@ router.put('/:id/reject',
               approved_by = @approved_by,
               remarks = @remarks
           WHERE request_id = @id
+        `);
+
+      // Audit log the rejection action
+      await pool.request()
+        .input('log_user_id', sql.Int, approved_by)
+        .input('log_record_id', sql.Int, req.params.id)
+        .input('log_action_type', sql.VarChar(50), 'REJECT')
+        .input('log_table_name', sql.VarChar(50), 'Approval_Request')
+        .input('log_new_value', sql.VarChar(sql.MAX), `Rejected request ${req.params.id} with remarks: ${remarks || 'None'}`)
+        .query(`
+          INSERT INTO Audit_Log (user_id, record_id, action_type, table_name, old_value, new_value)
+          VALUES (@log_user_id, @log_record_id, @log_action_type, @log_table_name, NULL, @log_new_value);
         `);
 
       return res.json({
