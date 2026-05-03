@@ -1,41 +1,168 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
+import Navbar from '../components/Navbar';
 
-export default function Teams() {
-  const [rows, setRows] = useState([]);
+const Teams = () => {
+  const [teams, setTeams] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ team_id: '', report_id: '' });
+  const [msg, setMsg] = useState({ text: '', type: '' });
 
-  useEffect(() => {
-    api.get('/teams').then(res => setRows(res.data)).catch(console.error);
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const statusColor = (s) => {
-    switch (s) {
-      case 'Deployed':    return 'bg-blue-600/20 text-blue-400';
-      case 'Available':   return 'bg-green-600/20 text-green-400';
-      case 'Standby':     return 'bg-yellow-600/20 text-yellow-400';
-      case 'Unavailable': return 'bg-red-600/20 text-red-400';
-      default:            return 'bg-slate-600/20 text-slate-400';
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [tRes, aRes, repRes] = await Promise.all([
+        api.get('/teams'),
+        api.get('/teams/assignments'),
+        api.get('/emergencies/reports'),
+      ]);
+      setTeams(tRes.data);
+      setAssignments(aRes.data);
+      setReports(repRes.data);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMsg({ text: '', type: '' });
+    try {
+      await api.post('/approvals/request-deployment', {
+        team_id: parseInt(form.team_id),
+        report_id: parseInt(form.report_id),
+      });
+      setMsg({ text: 'Deployment request submitted for approval.', type: 'success' });
+      setForm({ team_id: '', report_id: '' });
+      setShowForm(false);
+    } catch (err) {
+      setMsg({ text: err.response?.data?.error || 'Request failed.', type: 'error' });
     }
   };
 
+  const statusBadge = (s) => {
+    const map = { Available: 'badge-available', Assigned: 'badge-assigned', Busy: 'badge-busy' };
+    return <span className={`badge ${map[s] || 'badge-low'}`}>{s}</span>;
+  };
+
+  const available = teams.filter(t => t.availability_status === 'Available').length;
+  const active = teams.filter(t => ['Assigned', 'Busy'].includes(t.availability_status)).length;
+
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Teams</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {rows.map(t => (
-          <div key={t.teamId} className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-            <div className="flex justify-between items-start mb-3">
-              <h3 className="font-semibold text-lg">{t.teamName}</h3>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(t.status)}`}>{t.status}</span>
+    <>
+      <Navbar active="teams" />
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">Rescue Teams</h1>
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ Request Deployment'}
+          </button>
+        </div>
+
+        <div className="stat-grid">
+          <div className="stat-card"><div className="label">Total Teams</div><div className="value">{teams.length}</div></div>
+          <div className="stat-card"><div className="label">Available</div><div className="value green">{available}</div></div>
+          <div className="stat-card"><div className="label">Active / Busy</div><div className="value accent">{active}</div></div>
+          <div className="stat-card"><div className="label">Assignments</div><div className="value blue">{assignments.length}</div></div>
+        </div>
+
+        {showForm && (
+          <div className="card" style={{ borderLeft: '3px solid #e8460a', marginBottom: 20 }}>
+            <div className="card-header"><span className="card-title">Request team deployment</span></div>
+            <div className="card-body">
+              {msg.text && <div className={`alert alert-${msg.type}`} style={{ marginBottom: 16 }}>{msg.text}</div>}
+              <form onSubmit={handleSubmit}>
+                <div className="form-grid" style={{ marginBottom: 16 }}>
+                  <div className="form-group">
+                    <label>Team *</label>
+                    <select value={form.team_id} onChange={e => setForm({ ...form, team_id: e.target.value })} required>
+                      <option value="">Select team</option>
+                      {teams.map(t => (
+                        <option key={t.team_id} value={t.team_id}>
+                          #{t.team_id} — {t.team_name} ({t.team_type}) · {t.availability_status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Emergency Report *</label>
+                    <select value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })} required>
+                      <option value="">Select report</option>
+                      {reports.map(r => (
+                        <option key={r.report_id} value={r.report_id}>
+                          #{r.report_id} — {r.area_name} ({r.severity})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button type="submit" className="btn btn-primary">Submit Request</button>
+              </form>
             </div>
-            <p className="text-sm text-slate-400 mb-1">Specialization: {t.specialization}</p>
-            <p className="text-sm text-slate-400 mb-1">Members: {t.memberCount}</p>
-            {t.deployedAt && (
-              <p className="text-xs text-slate-500 mt-2">Deployed: {new Date(t.deployedAt).toLocaleString()}</p>
-            )}
           </div>
-        ))}
+        )}
+
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <span className="card-title">All teams</span>
+            <span className="mono">{teams.length} units</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>#ID</th><th>Team Name</th><th>Type</th><th>Area</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan="5"><div className="empty">loading...</div></td></tr>
+                ) : teams.length === 0 ? (
+                  <tr><td colSpan="5"><div className="empty">no teams found</div></td></tr>
+                ) : teams.map(t => (
+                  <tr key={t.team_id}>
+                    <td className="mono">{String(t.team_id).padStart(3, '0')}</td>
+                    <td style={{ fontWeight: 500 }}>{t.team_name}</td>
+                    <td className="mono">{t.team_type}</td>
+                    <td>{t.area_name}</td>
+                    <td>{statusBadge(t.availability_status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">Active assignments</span>
+            <span className="mono">{assignments.length} total</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Team</th><th>Area</th><th>Severity</th><th>Assigned at</th></tr>
+              </thead>
+              <tbody>
+                {assignments.length === 0 ? (
+                  <tr><td colSpan="4"><div className="empty">no assignments</div></td></tr>
+                ) : assignments.map((a, idx) => (
+                  <tr key={idx}>
+                    <td style={{ fontWeight: 500 }}>{a.team_name}</td>
+                    <td>{a.area_name}</td>
+                    <td>{a.report_severity}</td>
+                    <td className="mono">{new Date(a.assigned_at).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
-}
+};
+
+export default Teams;

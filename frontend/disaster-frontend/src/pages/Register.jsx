@@ -1,26 +1,24 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
-const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const Register = () => {
+  const [form, setForm] = useState({ full_name: '', email: '', password: '', role_name: '' });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(''); setSuccess('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
-      login(res.data.user, res.data.token);
-      navigate('/dashboard');
+      await api.post('/auth/register', form);
+      setSuccess('Account created. Redirecting...');
+      setTimeout(() => navigate('/login'), 1800);
     } catch (err) {
-      setError(err.response?.data?.message || 'Invalid credentials.');
+      setError(err.response?.data?.message || 'Registration failed.');
     } finally {
       setLoading(false);
     }
@@ -41,37 +39,54 @@ const Login = () => {
             </span>
           </div>
           <p style={{ fontSize: 12, color: '#4a4845', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
-            AUTHORIZED ACCESS ONLY
+            NEW ACCOUNT REGISTRATION
           </p>
         </div>
 
         <div style={{ background: '#111118', border: '1px solid rgba(255,255,255,0.07)', borderTop: '3px solid #e8460a', borderRadius: 4, padding: 32 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#7a7870', marginBottom: 24 }}>
-            Sign in to continue
-          </p>
-
           <form onSubmit={handleSubmit}>
             <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Full name</label>
+              <input type="text" value={form.full_name}
+                onChange={e => setForm({ ...form, full_name: e.target.value })}
+                placeholder="John Doe" required />
+            </div>
+            <div className="form-group" style={{ marginBottom: 16 }}>
               <label>Email address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="operator@agency.gov" required />
+              <input type="email" value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="you@agency.gov" required />
+            </div>
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Password</label>
+              <input type="password" value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="••••••••" required />
             </div>
             <div className="form-group" style={{ marginBottom: 24 }}>
-              <label>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••" required />
+              <label>Role</label>
+              <select value={form.role_name}
+                onChange={e => setForm({ ...form, role_name: e.target.value })} required>
+                <option value="">Select role</option>
+                <option value="Administrator">Administrator</option>
+                <option value="Emergency Operator">Emergency Operator</option>
+                <option value="Field Officer">Field Officer</option>
+                <option value="Warehouse Manager">Warehouse Manager</option>
+                <option value="Finance Officer">Finance Officer</option>
+              </select>
             </div>
 
             {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+            {success && <div className="alert alert-success" style={{ marginBottom: 16 }}>{success}</div>}
 
             <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-              {loading ? 'Authenticating...' : 'Authenticate'}
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 
           <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: '#4a4845', fontFamily: "'JetBrains Mono', monospace" }}>
-            No account?{' '}
-            <a href="/register" style={{ color: '#e8460a', textDecoration: 'underline', textUnderlineOffset: 3 }}>Register</a>
+            Have an account?{' '}
+            <a href="/login" style={{ color: '#e8460a', textDecoration: 'underline', textUnderlineOffset: 3 }}>Sign in</a>
           </p>
         </div>
       </div>
@@ -79,4 +94,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;

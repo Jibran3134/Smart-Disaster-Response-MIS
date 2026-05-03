@@ -1,60 +1,156 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
+import Navbar from '../components/Navbar';
 
-export default function Hospitals() {
-  const [rows, setRows] = useState([]);
+const Hospitals = () => {
+  const [hospitals, setHospitals] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedHospital, setSelectedHospital] = useState('');
+  const [form, setForm] = useState({ patient_name: '', dob: '', condition: '', report_id: '' });
+  const [msg, setMsg] = useState({ text: '', type: '' });
 
-  useEffect(() => {
-    api.get('/hospitals').then(res => setRows(res.data)).catch(console.error);
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const statusColor = (s) => {
-    switch (s) {
-      case 'Operational': return 'bg-green-600/20 text-green-400';
-      case 'Limited':     return 'bg-yellow-600/20 text-yellow-400';
-      case 'Full':        return 'bg-red-600/20 text-red-400';
-      case 'Closed':      return 'bg-slate-600/20 text-slate-400';
-      default:            return 'bg-slate-600/20 text-slate-400';
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [hRes, repRes] = await Promise.all([
+        api.get('/hospitals'),
+        api.get('/emergencies/reports'),
+      ]);
+      setHospitals(hRes.data);
+      setReports(repRes.data);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  const handleAdmit = async (e) => {
+    e.preventDefault();
+    setMsg({ text: '', type: '' });
+    if (!selectedHospital || !form.patient_name) {
+      setMsg({ text: 'Hospital and patient name are required.', type: 'error' }); return;
+    }
+    try {
+      await api.post(`/hospitals/${selectedHospital}/patients`, {
+        ...form,
+        report_id: form.report_id ? parseInt(form.report_id) : null,
+      });
+      setMsg({ text: 'Patient admitted successfully.', type: 'success' });
+      setForm({ patient_name: '', dob: '', condition: '', report_id: '' });
+      setSelectedHospital('');
+      setShowForm(false);
+      await fetchData(); // re-fetch so stats update immediately
+    } catch (err) {
+      setMsg({ text: err.response?.data?.error || 'Admission failed.', type: 'error' });
     }
   };
 
-  const occupancyBar = (available, total) => {
-    if (total === 0) return 0;
-    return Math.round(((total - available) / total) * 100);
-  };
+  // Compute stats from live data
+  const totalBeds = hospitals.reduce((s, h) => s + (h.total_beds || 0), 0);
+  const availBeds = hospitals.reduce((s, h) => s + (h.available_beds || 0), 0);
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Hospitals</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {rows.map(h => {
-          const pct = occupancyBar(h.availableBeds, h.totalBeds);
-          return (
-            <div key={h.hospitalId} className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <h3 className="font-semibold text-lg">{h.name}</h3>
-                  <p className="text-sm text-slate-400">{h.city}</p>
+    <>
+      <Navbar active="hospitals" />
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">Hospital Coordination</h1>
+          <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ Admit Patient'}
+          </button>
+        </div>
+
+        <div className="stat-grid">
+          <div className="stat-card"><div className="label">Hospitals</div><div className="value">{hospitals.length}</div></div>
+          <div className="stat-card"><div className="label">Total Beds</div><div className="value blue">{totalBeds}</div></div>
+          <div className="stat-card"><div className="label">Available Beds</div><div className="value green">{availBeds}</div></div>
+          <div className="stat-card"><div className="label">Occupied</div><div className="value accent">{totalBeds - availBeds}</div></div>
+        </div>
+
+        {showForm && (
+          <div className="card" style={{ borderLeft: '3px solid #e8460a', marginBottom: 20 }}>
+            <div className="card-header"><span className="card-title">Admit patient</span></div>
+            <div className="card-body">
+              {msg.text && <div className={`alert alert-${msg.type}`} style={{ marginBottom: 16 }}>{msg.text}</div>}
+              <form onSubmit={handleAdmit}>
+                <div className="form-grid" style={{ marginBottom: 16 }}>
+                  <div className="form-group">
+                    <label>Hospital *</label>
+                    <select value={selectedHospital} onChange={e => setSelectedHospital(e.target.value)} required>
+                      <option value="">Select hospital</option>
+                      {hospitals.map(h => (
+                        <option key={h.hospital_id} value={h.hospital_id}>
+                          {h.hospital_name} — {h.available_beds} beds available
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Patient name *</label>
+                    <input type="text" value={form.patient_name}
+                      onChange={e => setForm({ ...form, patient_name: e.target.value })} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Date of birth</label>
+                    <input type="date" value={form.dob}
+                      onChange={e => setForm({ ...form, dob: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Condition</label>
+                    <input type="text" value={form.condition}
+                      onChange={e => setForm({ ...form, condition: e.target.value })}
+                      placeholder="e.g. Critical" />
+                  </div>
+                  <div className="form-group">
+                    <label>Linked Emergency Report</label>
+                    <select value={form.report_id} onChange={e => setForm({ ...form, report_id: e.target.value })}>
+                      <option value="">None</option>
+                      {reports.map(r => (
+                        <option key={r.report_id} value={r.report_id}>
+                          #{r.report_id} — {r.area_name} ({r.severity})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(h.status)}`}>
-                  {h.status}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm text-slate-400 mb-2">
-                <span>Beds: {h.availableBeds} / {h.totalBeds} available</span>
-                <span>{pct}% occupied</span>
-              </div>
-              <div className="w-full bg-slate-700 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                  style={{ width: `${pct}%` }}
-                ></div>
-              </div>
-              {h.phone && <p className="text-xs text-slate-500 mt-3">📞 {h.phone}</p>}
+                <button type="submit" className="btn btn-primary">Admit Patient</button>
+              </form>
             </div>
-          );
-        })}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="empty">loading...</div>
+        ) : (
+          <div className="hospital-grid">
+            {hospitals.map(h => {
+              const occupancy = h.total_beds > 0
+                ? Math.round(((h.total_beds - h.available_beds) / h.total_beds) * 100) : 0;
+              const fillClass = occupancy >= 90 ? 'critical' : occupancy >= 70 ? 'warning' : '';
+              return (
+                <div key={h.hospital_id} className="hospital-card">
+                  <h3>{h.hospital_name}</h3>
+                  <p className="city">{h.city}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#7a7870', fontFamily: "'JetBrains Mono', monospace" }}>Beds available</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: h.available_beds <= 5 ? '#ef4444' : '#22c55e' }}>
+                      {h.available_beds} / {h.total_beds}
+                    </span>
+                  </div>
+                  <div className="capacity-bar">
+                    <div className={`capacity-fill ${fillClass}`} style={{ width: `${occupancy}%` }} />
+                  </div>
+                  <p style={{ fontSize: 11, color: '#4a4845', fontFamily: "'JetBrains Mono', monospace" }}>{occupancy}% occupied</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
-}
+};
+
+export default Hospitals;
